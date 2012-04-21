@@ -1,0 +1,12 @@
+{application, wsock,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { wsock_app, []}},
+  {env, []}
+ ]}.
