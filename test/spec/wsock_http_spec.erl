@@ -12,13 +12,13 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
--module(wsecli_http_spec).
+-module(wsock_http_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
 -include("wsecli.hrl").
 
 spec() ->
-  describe("wsecli_http", fun() ->
+  describe("wsock_http", fun() ->
         it("should build proper HTTP messages", fun() ->
           RequestLine = [
             {method, "GET"},
@@ -31,7 +31,7 @@ spec() ->
             {"Header-B", "B"}
           ],
 
-          Message = wsecli_http:build(request, RequestLine, Headers),
+          Message = wsock_http:build(request, RequestLine, Headers),
 
           assert_that(Message#http_message.type, is(request)),
 
@@ -53,8 +53,8 @@ spec() ->
             {"Header-B", "B"}
           ],
 
-          Message = wsecli_http:build(request, RequestLine, Headers),
-          Request = wsecli_http:to_request(Message),
+          Message = wsock_http:build(request, RequestLine, Headers),
+          Request = wsock_http:to_request(Message),
 
           assert_that(Request, is([
                 "GET / HTTP/1.1\r\n",
@@ -82,7 +82,7 @@ spec() ->
           ],
 
           ExpectedResponse = #http_message{type = response, start_line = StatusLine, headers = Headers},
-          Response = wsecli_http:from_response(Data),
+          Response = wsock_http:from_response(Data),
 
           assert_that(Response, is(ExpectedResponse))
       end),
@@ -100,9 +100,9 @@ spec() ->
             ]
           },
 
-          assert_that(wsecli_http:get_start_line_value(version, Message), is("1.1")),
-          assert_that(wsecli_http:get_start_line_value(method, Message), is("GET")),
-          assert_that(wsecli_http:get_start_line_value(resource, Message), is("/"))
+          assert_that(wsock_http:get_start_line_value(version, Message), is("1.1")),
+          assert_that(wsock_http:get_start_line_value(method, Message), is("GET")),
+          assert_that(wsock_http:get_start_line_value(resource, Message), is("/"))
       end),
     it("should return http_message header values if present", fun() ->
           Message = #http_message{
@@ -118,7 +118,7 @@ spec() ->
             ]
           },
 
-          assert_that(wsecli_http:get_header_value("header-a", Message), is("A")),
-          assert_that(wsecli_http:get_header_value("header-b", Message), is("b"))
+          assert_that(wsock_http:get_header_value("header-a", Message), is("A")),
+          assert_that(wsock_http:get_header_value("header-b", Message), is("b"))
       end)
     end).

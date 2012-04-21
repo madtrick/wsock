@@ -12,7 +12,7 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
--module(wsecli_message_spec).
+-module(wsock_message_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
 -include("wsecli.hrl").
@@ -30,17 +30,17 @@ spec() ->
           end),
 
         it("should set opcode to 'text' if type is text", fun() ->
-              wsecli_message:encode("asadsd", text),
+              wsock_message:encode("asadsd", text),
               assert_that(meck:called(wsecli_framing, frame, ['_', [fin, {opcode, text}]]), is(true))
           end),
         it("should set opcode to 'binary' if type is binary", fun() ->
-              wsecli_message:encode(<<"asdasd">>, binary),
+              wsock_message:encode(<<"asdasd">>, binary),
               assert_that(meck:called(wsecli_framing, frame, ['_', [fin, {opcode, binary}]]), is(true))
           end),
         describe("when payload size is <= fragment size", fun()->
               it("should return a list with only one binary fragment", fun()->
                     Data = "Foo bar",
-                    [BinFrame | []] = wsecli_message:encode(Data, text),
+                    [BinFrame | []] = wsock_message:encode(Data, text),
                     assert_that(byte_size(list_to_binary(Data)),is(less_than(?FRAGMENT_SIZE))),
                     assert_that(is_binary(BinFrame), is(true)),
                     assert_that(meck:called(wsecli_framing, to_binary, '_'), is(true)),
@@ -48,7 +48,7 @@ spec() ->
                 end),
               it("should set opcode to 'type'", fun() ->
                     Data = "Foo bar",
-                    [Frame] = wsecli_message:encode(Data, text),
+                    [Frame] = wsock_message:encode(Data, text),
 
                     <<_:4, Opcode:4, _/binary>> = Frame,
 
@@ -56,7 +56,7 @@ spec() ->
                 end),
               it("should set fin", fun()->
                     Data = "Foo bar",
-                    [Frame] = wsecli_message:encode(Data, text),
+                    [Frame] = wsock_message:encode(Data, text),
 
                     <<Fin:1, _/bits>> = Frame,
 
@@ -66,14 +66,14 @@ spec() ->
         describe("when payload size is > fragment size", fun() ->
               it("should return a list of binary fragments", fun()->
                     Data = crypto:rand_bytes(5000),
-                    Frames = wsecli_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, binary),
                     assert_that(meck:called(wsecli_framing, to_binary, '_'), is(true)),
                     assert_that(meck:called(wsecli_framing, frame, '_'), is(true)),
                     assert_that(length(Frames), is(2))
                 end),
               it("should set a payload of 4096 bytes or less on each fragment", fun() ->
                     Data = crypto:rand_bytes(12288),
-                    Frames = wsecli_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, binary),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
@@ -87,7 +87,7 @@ spec() ->
                 end),
               it("should set opcode to 'type' on the first fragment", fun()->
                     Data = crypto:rand_bytes(5000),
-                    Frames = wsecli_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, binary),
 
                     [FirstFragment | _ ] = Frames,
 
@@ -97,7 +97,7 @@ spec() ->
                 end),
               it("should unset fin on all fragments but last", fun() ->
                     Data = crypto:rand_bytes(12288), %4096 * 3
-                    Frames = wsecli_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, binary),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
@@ -111,7 +111,7 @@ spec() ->
                 end),
               it("should set opcode to 'continuation' on all fragments but first", fun() ->
                     Data = crypto:rand_bytes(12288), %4096 * 3
-                    Frames = wsecli_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, binary),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
@@ -127,10 +127,10 @@ spec() ->
         describe("control messages", fun() ->
               describe("close", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsecli_message:encode([], close)
+                          [_Frame] = wsock_message:encode([], close)
                       end),
                     it("should return a close frame", fun() ->
-                          [Frame] = wsecli_message:encode([], close),
+                          [Frame] = wsock_message:encode([], close),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -139,17 +139,17 @@ spec() ->
                           assert_that(Opcode, is(8))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsecli_message:encode({1004, "Chapando el garito"}, close),
+                          [Frame] = wsock_message:encode({1004, "Chapando el garito"}, close),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, _PayloadLen:7, _Mask:32, _Payload/binary>> = Frame
                       end)
                 end),
               describe("ping", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsecli_message:encode([], ping)
+                          [_Frame] = wsock_message:encode([], ping)
                       end),
                     it("should return a ping frame", fun() ->
-                          [Frame] = wsecli_message:encode([], ping),
+                          [Frame] = wsock_message:encode([], ping),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -158,17 +158,17 @@ spec() ->
                           assert_that(Opcode, is(9))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsecli_message:encode("1234", ping),
+                          [Frame] = wsock_message:encode("1234", ping),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, 4:7, _Mask:32, _Payload:4/binary>> = Frame
                       end)
                 end),
               describe("pong", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsecli_message:encode([], pong)
+                          [_Frame] = wsock_message:encode([], pong)
                       end),
                     it("should return a ping frame", fun() ->
-                          [Frame] = wsecli_message:encode([], pong),
+                          [Frame] = wsock_message:encode([], pong),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -177,7 +177,7 @@ spec() ->
                           assert_that(Opcode, is(10))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsecli_message:encode("1234", pong),
+                          [Frame] = wsock_message:encode("1234", pong),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, 4:7, _Mask:32, _Payload:4/binary>> = Frame
                       end)
@@ -200,7 +200,7 @@ spec() ->
 
                     Data = <<FakeFragment1/binary, FakeFragment2/binary>>,
 
-                    [Message] = wsecli_message:decode(Data),
+                    [Message] = wsock_message:decode(Data),
 
                     assert_that(Message#message.type, is(fragmented)),
                     assert_that(length(Message#message.frames), is(2))
@@ -221,7 +221,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary, FakeFragment4/binary>>,
 
-                    [Message] = wsecli_message:decode(Data),
+                    [Message] = wsock_message:decode(Data),
 
                     assert_that(Message#message.type, is(binary)),
                     assert_that(Message#message.payload, is(Payload))
@@ -241,7 +241,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary>>,
 
-                    [Message] = wsecli_message:decode(Data),
+                    [Message] = wsock_message:decode(Data),
 
                     assert_that(Message#message.type, is(text)),
                     assert_that(Message#message.payload, is(Text))
@@ -262,8 +262,8 @@ spec() ->
                     Data1 = <<FakeFragment1/binary, FakeFragment2/binary>>,
                     Data2 = <<FakeFragment3/binary>>,
 
-                    [Message1] = wsecli_message:decode(Data1),
-                    [Message2] = wsecli_message:decode(Data2, Message1),
+                    [Message1] = wsock_message:decode(Data1),
+                    [Message2] = wsock_message:decode(Data2, Message1),
 
                     assert_that(Message1#message.type, is(fragmented)),
                     assert_that(Message2#message.type, is(binary)),
@@ -290,7 +290,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary, FakeFragment4/binary>>,
 
-                    [Message1, Message2] = wsecli_message:decode(Data),
+                    [Message1, Message2] = wsock_message:decode(Data),
 
                     assert_that(Message1#message.type, is(binary)),
                     assert_that(Message1#message.payload, is(BinPayload1)),
@@ -319,7 +319,7 @@ spec() ->
 
                   Data = << FakeMessage1/binary, FakeMessage2/binary, FakeMessage3/binary>>,
 
-                  [Message1, Message2, Message3] = wsecli_message:decode(Data),
+                  [Message1, Message2, Message3] = wsock_message:decode(Data),
 
                   assert_that(Message1#message.type, is(text)),
                   assert_that(Message1#message.payload, is(Text1)),
@@ -346,7 +346,7 @@ spec() ->
 
                   Data = << FakeMessage1/binary, FakeMessage2/binary, FakeMessage3/binary>>,
 
-                  [Message1, Message2, Message3] = wsecli_message:decode(Data),
+                  [Message1, Message2, Message3] = wsock_message:decode(Data),
 
                   assert_that(Message1#message.type, is(text)),
                   assert_that(Message1#message.payload, is(Text1)),
@@ -360,7 +360,7 @@ spec() ->
                     Payload = crypto:rand_bytes(45),
                     %")
                     FakeMessage = get_binary_frame(1, 0, 0, 0, 2, 0, 45, 0, Payload),
-                    [Message] = wsecli_message:decode(FakeMessage),
+                    [Message] = wsock_message:decode(FakeMessage),
 
                     assert_that( Message#message.payload, is(Payload))
                 end),
@@ -370,7 +370,7 @@ spec() ->
                     PayloadData = list_to_binary(Payload),
 
                     FakeMessage = get_binary_frame(1, 0, 0, 0, 1, 0, PayloadLength, 0, PayloadData),
-                    [Message] = wsecli_message:decode(FakeMessage),
+                    [Message] = wsock_message:decode(FakeMessage),
 
                     assert_that( Message#message.payload, is(Payload))
                 end),
@@ -379,7 +379,7 @@ spec() ->
                           it("should return a message with type ping", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 9, 0, 0, 0, <<>>),
 
-                                [Message] = wsecli_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage),
 
                                 assert_that(Message#message.type, is(ping))
                             end)
@@ -388,7 +388,7 @@ spec() ->
                           it("should return a message with type pong", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 10, 0, 0, 0, <<>>),
 
-                                [Message] = wsecli_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage),
 
                                 assert_that(Message#message.type, is(pong))
                             end)
@@ -397,7 +397,7 @@ spec() ->
                           it("should return a message with type close", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, 0, 0, <<>>),
 
-                                [Message] = wsecli_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage),
 
                                 assert_that(Message#message.type, is(close))
                             end),
@@ -409,7 +409,7 @@ spec() ->
                                       PayloadLen = byte_size(Payload),
                                       FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, PayloadLen, 0, Payload),
 
-                                      [Message] = wsecli_message:decode(FakeMessage),
+                                      [Message] = wsock_message:decode(FakeMessage),
                                       {St, Re} = Message#message.payload,
 
                                       assert_that(St, is(Status)),
@@ -420,7 +420,7 @@ spec() ->
                                 it("should return the payload as a tuple {undefined, undefined}", fun() ->
                                       FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, 0, 0, <<>>),
 
-                                      [Message] = wsecli_message:decode(FakeMessage),
+                                      [Message] = wsock_message:decode(FakeMessage),
                                       {Status, Reason} = Message#message.payload,
 
                                       assert_that(Status, is(undefined)),

@@ -14,7 +14,7 @@
 
 %% @hidden
 
--module(wsecli_handshake).
+-module(wsock_handshake).
 
 -include("wsecli.hrl").
 -export([build/3, validate/2]).

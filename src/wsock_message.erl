@@ -14,7 +14,7 @@
 
 %% @hidden
 
--module(wsecli_message).
+-module(wsock_message).
 -include("wsecli.hrl").
 
 -export([encode/2, decode/1, decode/2]).

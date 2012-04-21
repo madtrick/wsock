@@ -12,18 +12,18 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
--module(wsecli_key_spec).
+-module(wsock_key_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
 
 spec() ->
-  describe("wsecli_key", fun() ->
+  describe("wsock_key", fun() ->
         it("should return a valid Sec-WebSocket-Key", fun() ->
               %Meck crashes if we try to mock crypto module
               %meck:new(crypto, [passthrough]),
               meck:new(base64, [unstick, passthrough]),
 
-              Key = wsecli_key:generate(),
+              Key = wsock_key:generate(),
 
               assert_that(length(Key), is(24)),
               %assert_that(meck:called(crypto, rand_bytes, 16), is(true)),

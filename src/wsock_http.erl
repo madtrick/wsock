@@ -14,7 +14,7 @@
 
 %% @hidden
 
--module(wsecli_http).
+-module(wsock_http).
 -include("wsecli.hrl").
 
 -export([build/3, to_request/1, from_response/1, get_start_line_value/2, get_header_value/2]).
@@ -58,7 +58,7 @@ from_response(Data) ->
         [{string:strip(HeaderName), HeaderValue} | Acc]
     end, [], Headers),
 
-  wsecli_http:build(response, StatusLineList, HeadersList).
+  wsock_http:build(response, StatusLineList, HeadersList).
 
 -spec get_start_line_value(Key::atom(), Message::#http_message{}) -> string().
 get_start_line_value(Key, Message) ->

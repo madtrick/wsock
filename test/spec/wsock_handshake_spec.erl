@@ -12,20 +12,20 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
--module(wsecli_handshake_spec).
+-module(wsock_handshake_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
 
 -include("wsecli.hrl").
 
 spec() ->
-  describe("wsecli_handshake", fun() ->
+  describe("wsock_handshake", fun() ->
         it("should return a valid handshake request", fun() ->
               Resource  = "/",
               Host     = "localhost",
               Port      = 8080,
 
-              HandShake = wsecli_handshake:build(Resource, Host, Port),
+              HandShake = wsock_handshake:build(Resource, Host, Port),
               assert_that(HandShake#handshake.version, is(13)),
 
               HttpMessage = HandShake#handshake.message,
@@ -44,7 +44,7 @@ spec() ->
               Host = "localhost",
               Port = 8080,
 
-              HandShake = wsecli_handshake:build(Resource, Host, Port),
+              HandShake = wsock_handshake:build(Resource, Host, Port),
               Key = wsecli_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
 
               BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
@@ -56,7 +56,7 @@ spec() ->
               Header-D: D\r\n\r\n"]),
               Response = wsecli_http:from_response(BinResponse),
 
-              assert_that(wsecli_handshake:validate(Response, HandShake),is(true))
+              assert_that(wsock_handshake:validate(Response, HandShake),is(true))
           end)
     end).
 

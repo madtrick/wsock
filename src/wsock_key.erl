@@ -14,7 +14,7 @@
 
 %% @hidden
 
--module(wsecli_key).
+-module(wsock_key).
 
 -export([generate/0]).
 

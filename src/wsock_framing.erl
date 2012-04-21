@@ -14,7 +14,7 @@
 
 %% @hidden
 
--module(wsecli_framing).
+-module(wsock_framing).
 -include("wsecli.hrl").
 
 -export([to_binary/1, from_binary/1, frame/1, frame/2]).
