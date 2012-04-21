@@ -15,7 +15,7 @@
 -module(wsock_http_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 spec() ->
   describe("wsock_http", fun() ->

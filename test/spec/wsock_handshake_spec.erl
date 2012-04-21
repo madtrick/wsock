@@ -16,7 +16,7 @@
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
 
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 spec() ->
   describe("wsock_handshake", fun() ->
@@ -29,15 +29,15 @@ spec() ->
               assert_that(HandShake#handshake.version, is(13)),
 
               HttpMessage = HandShake#handshake.message,
-              assert_that(wsecli_http:get_start_line_value(method, HttpMessage), is("GET")),
-              assert_that(wsecli_http:get_start_line_value(version, HttpMessage), is("1.1")),
-              assert_that(wsecli_http:get_start_line_value(resource, HttpMessage), is("/")),
+              assert_that(wsock_http:get_start_line_value(method, HttpMessage), is("GET")),
+              assert_that(wsock_http:get_start_line_value(version, HttpMessage), is("1.1")),
+              assert_that(wsock_http:get_start_line_value(resource, HttpMessage), is("/")),
 
-              assert_that(wsecli_http:get_header_value("Host", HttpMessage), is(Host ++ ":" ++ integer_to_list(Port))),
-              assert_that(wsecli_http:get_header_value("Upgrade", HttpMessage), is("websocket")),
-              assert_that(wsecli_http:get_header_value("Connection", HttpMessage), is("upgrade")),
-              assert_that(wsecli_http:get_header_value("Sec-Websocket-Key", HttpMessage), is_not(undefined)),
-              assert_that(wsecli_http:get_header_value("Sec-Websocket-Version", HttpMessage), is("13"))
+              assert_that(wsock_http:get_header_value("Host", HttpMessage), is(Host ++ ":" ++ integer_to_list(Port))),
+              assert_that(wsock_http:get_header_value("Upgrade", HttpMessage), is("websocket")),
+              assert_that(wsock_http:get_header_value("Connection", HttpMessage), is("upgrade")),
+              assert_that(wsock_http:get_header_value("Sec-Websocket-Key", HttpMessage), is_not(undefined)),
+              assert_that(wsock_http:get_header_value("Sec-Websocket-Version", HttpMessage), is("13"))
           end),
         it("should validate a handshake response", fun() ->
               Resource = "/",
@@ -45,7 +45,7 @@ spec() ->
               Port = 8080,
 
               HandShake = wsock_handshake:build(Resource, Host, Port),
-              Key = wsecli_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
+              Key = wsock_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
 
               BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
               Upgrade: websocket\r\n
@@ -54,7 +54,7 @@ spec() ->
               "Header-A: A\r\n
               Header-C: 123123\r\n
               Header-D: D\r\n\r\n"]),
-              Response = wsecli_http:from_response(BinResponse),
+              Response = wsock_http:from_response(BinResponse),
 
               assert_that(wsock_handshake:validate(Response, HandShake),is(true))
           end)

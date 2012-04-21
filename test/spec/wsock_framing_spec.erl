@@ -15,7 +15,7 @@
 -module(wsock_framing_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
--include("wsecli.hrl").
+-include("wsock.hrl").
 %-compile([export_all]).
 
 spec() ->

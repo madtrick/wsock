@@ -15,7 +15,7 @@
 %% @hidden
 
 -module(wsock_message).
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 -export([encode/2, decode/1, decode/2]).
 
@@ -44,8 +44,8 @@ decode(Data, Message) ->
 -spec encode(Data::binary(), Type :: atom(), Acc ::list()) -> list().
 encode(Data, Type, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
   [frame(Data, [fin, {opcode, Type}])];
-  %Frame = wsecli_framing:frame(Data, [fin, {opcode, Type}]),
-  %wsecli_framing:to_binary(Frame);
+  %Frame = wsock_framing:frame(Data, [fin, {opcode, Type}]),
+  %wsock_framing:to_binary(Frame);
 
 encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, Acc) ->
   [frame(Data, [fin, {opcode, Type}]) | Acc];
@@ -64,16 +64,16 @@ encode(<<Data/binary>>, Type, Acc) ->
 
 -spec frame(Data::binary(), Options::list()) -> binary().
 frame(Data, Options) ->
-  Frame = wsecli_framing:frame(Data, Options),
-  wsecli_framing:to_binary(Frame).
+  Frame = wsock_framing:frame(Data, Options),
+  wsock_framing:to_binary(Frame).
 
 -spec decode(Data::binary(), Type :: message_type(), Message::#message{}) -> list(#message{}).
 decode(Data, begin_message, _Message) ->
-  Frames = wsecli_framing:from_binary(Data),
+  Frames = wsock_framing:from_binary(Data),
   lists:reverse(process_frames(begin_message, Frames, []));
 
 decode(Data, continue_message, Message) ->
-  Frames = wsecli_framing:from_binary(Data),
+  Frames = wsock_framing:from_binary(Data),
   lists:reverse(process_frames(continue_message, Frames, [Message | []])).
 
 -spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}).

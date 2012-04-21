@@ -15,27 +15,27 @@
 -module(wsock_message_spec).
 -include_lib("espec/include/espec.hrl").
 -include_lib("hamcrest/include/hamcrest.hrl").
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 -define(FRAGMENT_SIZE, 4096).
 
 spec() ->
   describe("encode", fun() ->
         before_all(fun()->
-              meck:new(wsecli_framing, [passthrough])
+              meck:new(wsock_framing, [passthrough])
           end),
 
         after_all(fun()->
-              meck:unload(wsecli_framing)
+              meck:unload(wsock_framing)
           end),
 
         it("should set opcode to 'text' if type is text", fun() ->
               wsock_message:encode("asadsd", text),
-              assert_that(meck:called(wsecli_framing, frame, ['_', [fin, {opcode, text}]]), is(true))
+              assert_that(meck:called(wsock_framing, frame, ['_', [fin, {opcode, text}]]), is(true))
           end),
         it("should set opcode to 'binary' if type is binary", fun() ->
               wsock_message:encode(<<"asdasd">>, binary),
-              assert_that(meck:called(wsecli_framing, frame, ['_', [fin, {opcode, binary}]]), is(true))
+              assert_that(meck:called(wsock_framing, frame, ['_', [fin, {opcode, binary}]]), is(true))
           end),
         describe("when payload size is <= fragment size", fun()->
               it("should return a list with only one binary fragment", fun()->
@@ -43,8 +43,8 @@ spec() ->
                     [BinFrame | []] = wsock_message:encode(Data, text),
                     assert_that(byte_size(list_to_binary(Data)),is(less_than(?FRAGMENT_SIZE))),
                     assert_that(is_binary(BinFrame), is(true)),
-                    assert_that(meck:called(wsecli_framing, to_binary, '_'), is(true)),
-                    assert_that(meck:called(wsecli_framing, frame, '_'), is(true))
+                    assert_that(meck:called(wsock_framing, to_binary, '_'), is(true)),
+                    assert_that(meck:called(wsock_framing, frame, '_'), is(true))
                 end),
               it("should set opcode to 'type'", fun() ->
                     Data = "Foo bar",
@@ -67,8 +67,8 @@ spec() ->
               it("should return a list of binary fragments", fun()->
                     Data = crypto:rand_bytes(5000),
                     Frames = wsock_message:encode(Data, binary),
-                    assert_that(meck:called(wsecli_framing, to_binary, '_'), is(true)),
-                    assert_that(meck:called(wsecli_framing, frame, '_'), is(true)),
+                    assert_that(meck:called(wsock_framing, to_binary, '_'), is(true)),
+                    assert_that(meck:called(wsock_framing, frame, '_'), is(true)),
                     assert_that(length(Frames), is(2))
                 end),
               it("should set a payload of 4096 bytes or less on each fragment", fun() ->
