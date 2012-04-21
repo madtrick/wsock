@@ -1,0 +1,12 @@
+{application, wsock,
+ [
+  {description, "wsock is a library for building WebSocket clients and servers"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { wsock_app, []}},
+  {env, []}
+ ]}.
