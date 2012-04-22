@@ -25,16 +25,16 @@
 -spec decode(Data::binary(), Type::request | response) -> #http_message{}.
 decode(Data, Type) ->
   [StartLine | Headers] = split(Data),
-  case process_startline(StartLine, Type) of
-    {ok, StartLineList} ->
-      case process_headers(Headers) of
-        {ok,        HeaderList} ->
-          wsock_http:build(Type, StartLineList, HeaderList);
-        {error, nomatch} ->
-          {error, malformed_request}
-      end;
-    {error, nomatch} ->
-      {error, malformed_request}
+  StartLineProcessed = process_startline(StartLine, Type),
+  HeadersProcessed = process_headers(Headers),
+
+  case {StartLineProcessed, HeadersProcessed} of
+    {{error, _}, _} ->
+      {error, malformed_request};
+    {_, {error, _}} ->
+      {error, malformed_request};
+    {{ok, StartLineList}, {ok, HeaderList}} ->
+          wsock_http:build(Type, StartLineList, HeaderList)
   end.
 
 
