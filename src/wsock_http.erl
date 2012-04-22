@@ -27,11 +27,13 @@ decode(Data, Type) ->
   [StartLine | Headers] = split(Data),
   case process_startline(StartLine, Type) of
     {ok, StartLineList} ->
-      HeaderList = lists:foldr(fun(Element, Acc) ->
-            {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
-            [{string:strip(HeaderName), HeaderValue} | Acc]
-        end, [], Headers),
-      wsock_http:build(Type, StartLineList, HeaderList);
+      case process_headers(Headers) of
+        {ok,        HeaderList} ->
+          wsock_http:build(Type, StartLineList, HeaderList);
+        {error, nomatch} ->
+
+          {error, malformed_request}
+      end;
     {error, nomatch} ->
       {error, malformed_request}
   end.
@@ -92,7 +94,7 @@ get_header_value_case_insensitive(Key, [{Name, Value} | Tail]) ->
 split(Data)->
   binary:split(Data, <<?CTRL>>, [trim, global]).
 
--spec process_startline(StartLine::binary(), Type:: request | response) -> list().
+-spec process_startline(StartLine::binary(), Type:: request | response) -> list() | {error, term()}.
 process_startline(StartLine, request) ->
   process_startline(StartLine, "(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", [method, resource, version]);
 
@@ -110,3 +112,25 @@ process_startline(StartLine, Regexp, Keys) ->
 -spec regexp_run(Regexp::list(), String::binary()) -> {match, list()}.
 regexp_run(Regexp, String) ->
   re:run(String, Regexp, [{capture, all, list}, caseless]).
+
+
+-spec process_headers(Headers::list(binary())) -> list({list(), list()}).
+process_headers(Headers) ->
+  process_headers(Headers, []).
+  %lists:foldr(fun(Element, Acc) ->
+  %      {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
+  %      [{string:strip(HeaderName), HeaderValue} | Acc]
+  %  end, [], Headers).
+
+-spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
+process_headers([Header | Tail], Acc) ->
+  case re:run(Header, "(\.+):\s+(\.+)", [{capture, all, list}]) of
+    {match, [_Match, HeaderName, HeaderValue]} -> 
+      process_headers(Tail, [{string:strip(HeaderName), HeaderValue} | Acc]);
+    nomatch ->
+      {error, nomatch}
+  end;
+
+process_headers([], Acc) ->
+  {ok, Acc}.
+
