@@ -31,7 +31,6 @@ decode(Data, Type) ->
         {ok,        HeaderList} ->
           wsock_http:build(Type, StartLineList, HeaderList);
         {error, nomatch} ->
-
           {error, malformed_request}
       end;
     {error, nomatch} ->
@@ -74,7 +73,7 @@ get_header_value(Key, Message) ->
   get_header_value_case_insensitive(LowerCasedKey, Message#http_message.headers).
 
 -spec get_header_value_case_insensitive(Key::string(), list()) ->  undefined;
-                                        (Key::string(), list()) -> string().
+(Key::string(), list()) -> string().
 get_header_value_case_insensitive(_, []) ->
   undefined;
 
@@ -117,10 +116,6 @@ regexp_run(Regexp, String) ->
 -spec process_headers(Headers::list(binary())) -> list({list(), list()}).
 process_headers(Headers) ->
   process_headers(Headers, []).
-  %lists:foldr(fun(Element, Acc) ->
-  %      {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
-  %      [{string:strip(HeaderName), HeaderValue} | Acc]
-  %  end, [], Headers).
 
 -spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
 process_headers([Header | Tail], Acc) ->
