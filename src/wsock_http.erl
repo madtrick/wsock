@@ -17,33 +17,21 @@
 -module(wsock_http).
 -include("wsock.hrl").
 
--export([build/3, to_request/1, from_response/1, get_start_line_value/2, get_header_value/2]).
+-export([build/3, to_request/1, get_start_line_value/2, get_header_value/2]).
 -export([decode/2]).
 
 -define(CTRL, "\r\n").
 
 -spec decode(Data::binary(), Type::request | response) -> #http_message{}.
-decode(Data, request) ->
+decode(Data, Type) ->
   [StartLine | Headers] = split(Data),
-  {match, [_, Method, RequestURI, Version]} = re:run(StartLine, "(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", [{capture, all, list}, caseless]),
-  StartLineList = [{method, Method}, {resource, RequestURI}, {version, Version}],
-  
+  StartLineList = process_startline(StartLine, Type),
   HeaderList = lists:foldr(fun(Element, Acc) ->
         {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
         [{string:strip(HeaderName), HeaderValue} | Acc]
     end, [], Headers),
-  wsock_http:build(request, StartLineList, HeaderList);
+  wsock_http:build(Type, StartLineList, HeaderList).
 
-decode(Data, response) ->
-  [StartLine | Headers] = split(Data),
-  {match, [_, Version, Status, Reason]} = re:run(StartLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [{capture, all, list}, caseless]),
-  StartLineList = [{version, Version}, {status, Status}, {reason, Reason}],
-  
-  HeaderList = lists:foldr(fun(Element, Acc) ->
-        {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
-        [{string:strip(HeaderName), HeaderValue} | Acc]
-    end, [], Headers),
-  wsock_http:build(response, StartLineList, HeaderList).
 
 -spec build(Type::atom(), StartLine::list({atom(), string()}), Headers::list({string(), string()})) -> list(string()).
 build(Type, StartLine, Headers) ->
@@ -69,20 +57,6 @@ build_request_line(RequestLine, Acc) ->
   Resource = proplists:get_value(resource, RequestLine),
 
   [Method ++ " " ++ Resource ++ " " ++ "HTTP/" ++ Version ++ "\r\n" | Acc].
-
--spec from_response(Data::binary()) -> #http_message{}.
-from_response(Data) ->
-  [StatusLine | Headers] = split(Data),
-  {match, [_, Version, Status, Reason]} = re:run(StatusLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [{capture, all, list}]),
-
-  StatusLineList = [{version, Version}, {status, Status}, {reason, Reason}],
-
-  HeadersList = lists:foldr(fun(Element, Acc) ->
-        {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
-        [{string:strip(HeaderName), HeaderValue} | Acc]
-    end, [], Headers),
-
-  wsock_http:build(response, StatusLineList, HeadersList).
 
 -spec get_start_line_value(Key::atom(), Message::#http_message{}) -> string().
 get_start_line_value(Key, Message) ->
@@ -113,3 +87,16 @@ get_header_value_case_insensitive(Key, [{Name, Value} | Tail]) ->
 -spec split(Data::binary()) -> list(binary()).
 split(Data)->
   binary:split(Data, <<?CTRL>>, [trim, global]).
+
+-spec process_startline(StartLine::binary(), Type:: request | response) -> list().
+process_startline(StartLine, request) ->
+  {match, [_, Method, RequestURI, Version]} = regexp_run("(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", StartLine),
+  [{method, Method}, {resource, RequestURI}, {version, Version}];
+
+process_startline(StartLine, response) ->
+  {match, [_, Version, Status, Reason]} = regexp_run("HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", StartLine),
+  [{version, Version}, {status, Status}, {reason, Reason}].
+
+-spec regexp_run(Regexp::list(), String::binary()) -> {match, list()}.
+regexp_run(Regexp, String) ->
+  re:run(String, Regexp, [{capture, all, list}, caseless]).
