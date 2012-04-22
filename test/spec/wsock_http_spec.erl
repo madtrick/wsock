@@ -120,5 +120,29 @@ spec() ->
 
           assert_that(wsock_http:get_header_value("header-a", Message), is("A")),
           assert_that(wsock_http:get_header_value("header-b", Message), is("b"))
+      end),
+    describe("decode", fun()->
+          it("should return an http_message", fun() ->
+              Data = <<"GET / HTTP/1.1\r\n
+                Host : www.example.org\r\n
+                Upgrade : websocket\r\n
+                Sec-WebSocket-Key : ----\r\n
+                Header-D: D\r\n\r\n">>,
+
+              Message = wsock_http:decode(Data),
+
+              assert_that(Message#http_message.type, is(request)),
+
+              assert_that(wsock_http:get_start_line_value(method, Message), is("GET")),
+              assert_that(wsock_http:get_start_line_value(resource, Message), is("/")),
+              assert_that(wsock_http:get_start_line_value(version, Message), is("1.1")),
+
+              assert_that(wsock_http:get_header_value("host", Message), is("www.example.org")),
+              assert_that(wsock_http:get_header_value("upgrade", Message), is("websocket")),
+              assert_that(wsock_http:get_header_value("sec-websocket-key", Message), is("----")),
+              assert_that(wsock_http:get_header_value("header-d", Message), is("D")),
+              assert_that(wsock_http:get_header_value("non-existant-header", Message), is(undefined))
+
+            end)
       end)
     end).
