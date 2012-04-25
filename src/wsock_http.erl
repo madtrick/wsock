@@ -91,7 +91,13 @@ get_header_value_case_insensitive(Key, [{Name, Value} | Tail]) ->
 %=============
 -spec split(Data::binary()) -> list(binary()).
 split(Data)->
-  binary:split(Data, <<?CTRL>>, [trim, global]).
+  Fragments =   lists:map(fun(Element) ->
+        re:replace(Element, <<"^\n*\s*|\n*\s*$">>, <<"">>, [global, {return, binary}])
+    end, binary:split(Data, <<?CTRL>>, [trim, global])),
+
+  lists:filter(fun(Element) ->
+        <<>> =/= Element
+    end, Fragments).
 
 -spec process_startline(StartLine::binary(), Type:: request | response) -> list() | {error, term()}.
 process_startline(StartLine, request) ->
@@ -119,7 +125,7 @@ process_headers(Headers) ->
 
 -spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
 process_headers([Header | Tail], Acc) ->
-  case regexp_run("(\.+):\s+(\.+)", Header) of
+  case regexp_run("(.+)\s*:\s*(.+)", Header) of
     {match, [_Match, HeaderName, HeaderValue]} -> 
       process_headers(Tail, [{string:strip(HeaderName), HeaderValue} | Acc]);
     nomatch ->
