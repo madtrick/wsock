@@ -176,9 +176,9 @@ spec() ->
               assert_that(Response, is({error, malformed_request}))
           end),
         it("should return an error if some header is malformed", fun() ->
-              Data = <<"HTTP/1.1  Reset Content\r\n
+              Data = <<"HTTP/1.1 205 Reset Content\r\n
               Header-A: A\r\n
-              Header-C: dGhlIHNhbXBsZSBub25jZQ==\r\n
+              Header-C dGhlIHNhbXBsZSBub25jZQ==\r\n
               Header-D: D\r\n\r\n">>,
 
               Response = wsock_http:decode(Data, response),
