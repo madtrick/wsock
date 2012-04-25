@@ -119,7 +119,8 @@ process_headers(Headers) ->
 
 -spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
 process_headers([Header | Tail], Acc) ->
-  case re:run(Header, "(\.+):\s+(\.+)", [{capture, all, list}]) of
+  case regexp_run("(\.+):\s+(\.+)", Header) of
+  %case re:run(Header, "(\.+):\s+(\.+)", [{capture, all, list}]) of
     {match, [_Match, HeaderName, HeaderValue]} -> 
       process_headers(Tail, [{string:strip(HeaderName), HeaderValue} | Acc]);
     nomatch ->
