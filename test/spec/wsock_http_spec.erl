@@ -107,7 +107,7 @@ spec() ->
                       Sec-WebSocket-Key : ----\r\n
                       Header-D: D\r\n\r\n">>,
 
-                      Message = wsock_http:decode(Data, request),
+                      {ok, Message} = wsock_http:decode(Data, request),
 
                       assert_that(Message#http_message.type, is(request)),
 
@@ -153,7 +153,7 @@ spec() ->
               Header-C: dGhlIHNhbXBsZSBub25jZQ==\r\n
               Header-D: D\r\n\r\n">>,
 
-              Message = wsock_http:decode(Data, response),
+              {ok, Message} = wsock_http:decode(Data, response),
 
               assert_that(Message#http_message.type, is(response)),
 

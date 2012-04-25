@@ -22,7 +22,7 @@
 
 -define(CTRL, "\r\n").
 
--spec decode(Data::binary(), Type::request | response) -> #http_message{}.
+-spec decode(Data::binary(), Type::request | response) -> {ok,#http_message{}} | {error, malformed_request}.
 decode(Data, Type) ->
   [StartLine | Headers] = split(Data),
   StartLineProcessed = process_startline(StartLine, Type),
@@ -34,7 +34,7 @@ decode(Data, Type) ->
     {_, {error, _}} ->
       {error, malformed_request};
     {{ok, StartLineList}, {ok, HeaderList}} ->
-          wsock_http:build(Type, StartLineList, HeaderList)
+          {ok, wsock_http:build(Type, StartLineList, HeaderList)}
   end.
 
 
