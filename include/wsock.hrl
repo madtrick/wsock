@@ -1,11 +1,12 @@
 -record(http_message,{
     type :: response | request,
     start_line :: list({atom(), string()}),
-    headers :: list({atom(), string()})
+    headers :: list({string(), string()})
   }).
 
 -record(handshake, {
     version      :: integer(),
+    type :: handle_open,
     message :: #http_message{}
   }).
 

@@ -15,12 +15,60 @@
 %% @hidden
 
 -module(wsock_handshake).
-
 -include("wsock.hrl").
+
 -export([build/3, validate/2]).
+-export([handle_open/1]).
 
 -define(VERSION, 13).
 -define(GUID, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").
+
+-spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, atom()}.
+handle_open(Message) ->
+  StartLine = Message#http_message.start_line,
+  Headers = Message#http_message.headers,
+
+  case validate_startline(StartLine) andalso validate_headers(Headers) of
+    true ->
+      {ok , #handshake{ type = handle_open}};
+    false ->
+      {error, fuuu}
+  end.
+
+-spec validate_startline(StartLine::list({atom(), term()})) -> true | false.
+validate_startline(StartLine) ->
+  Matchers = [{method, "GET"}, {version, "1\.1"}],
+  lists:all(fun({Key, Value}) ->
+        match == re:run(proplists:get_value(Key, StartLine), Value, [caseless, {capture, none}])
+    end, Matchers).
+
+validate_headers(Headers) ->
+  Matchers = [
+    {"host", ".+"},
+    {"upgrade", "websocket"},
+  {"connection", "upgrade"},
+  {"sec-websocket-version", "13"}],
+
+  lists:all(fun({HeaderName, HeaderValue}) ->
+        case get_value_insensitive(HeaderName, Headers) of
+          Value ->
+            match == re:run(Value, HeaderValue, [caseless, {capture, none}]);
+          undefined ->
+            false
+        end
+        %match == re:run(proplists:get_value(Key, Headers), Value, [caseless, {capture, none}])
+    end, Matchers).
+
+get_value_insensitive(Key, [{Name, Value} | Tail]) ->
+  case re:run(Name, "^" ++ Key ++ "$", [caseless, {capture, first, list}]) of
+    {match, _} ->
+      Value;
+    nomatch ->
+        get_value_insensitive(Key, Tail)
+    end;
+
+get_value_insensitive(_, []) ->
+  undefined.
 
 -spec build(Resource ::string(), Host ::string(), Port::integer()) -> #handshake{}.
 build(Resource, Host, Port) ->
