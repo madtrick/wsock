@@ -64,7 +64,7 @@ spec() ->
                         Host : server.example.org\r\n
                         Upgrade : websocket\r\n
                         Connection : Upgrade\r\n
-                        Sec-WebSocket-Key : -----\r\n
+                        Sec-WebSocket-Key : AQIDBAUGBwgJCgsMDQ4PEA==\r\n
                         Sec-WebSocket-Version : 13\r\n\r\n
                         "]),
                     {ok, Message} = wsock_http:decode(BinRequest, request),

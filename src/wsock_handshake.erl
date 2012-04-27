@@ -49,6 +49,7 @@ validate_headers(Headers) ->
     {"host", ".+"},
     {"upgrade", "websocket"},
     {"connection", "upgrade"},
+    {"sec-websocket-key", "[a-z0-9\+\/]{22}=="},
     {"sec-websocket-version", "13"}],
 
   lists:all(fun({HeaderName, HeaderValue}) ->
