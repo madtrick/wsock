@@ -23,6 +23,8 @@
 -define(VERSION, 13).
 -define(GUID, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").
 
+-define(INVALID_CLIENT_OPEN, invalid_handshake_opening).
+
 -spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, atom()}.
 handle_open(Message) ->
   StartLine = Message#http_message.start_line,
@@ -30,9 +32,9 @@ handle_open(Message) ->
 
   case validate_startline(StartLine) andalso validate_headers(Headers) of
     true ->
-      {ok , #handshake{ type = handle_open}};
+      {ok , #handshake{ type = handle_open, message = Message}};
     false ->
-      {error, fuuu}
+      {error, ?INVALID_CLIENT_OPEN}
   end.
 
 -spec validate_startline(StartLine::list({atom(), term()})) -> true | false.
@@ -46,8 +48,8 @@ validate_headers(Headers) ->
   Matchers = [
     {"host", ".+"},
     {"upgrade", "websocket"},
-  {"connection", "upgrade"},
-  {"sec-websocket-version", "13"}],
+    {"connection", "upgrade"},
+    {"sec-websocket-version", "13"}],
 
   lists:all(fun({HeaderName, HeaderValue}) ->
         case get_value_insensitive(HeaderName, Headers) of
@@ -56,7 +58,6 @@ validate_headers(Headers) ->
           undefined ->
             false
         end
-        %match == re:run(proplists:get_value(Key, Headers), Value, [caseless, {capture, none}])
     end, Matchers).
 
 get_value_insensitive(Key, [{Name, Value} | Tail]) ->
