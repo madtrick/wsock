@@ -28,5 +28,5 @@
 -record(message, {
     frames = [] :: list(#frame{}),
     payload :: string() | binary(), % FALSE!!! what about control message with code + message
-    type :: {text, binary, control, fragmented}
+    type :: text | binary | control | fragmented
   }).
