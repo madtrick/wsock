@@ -17,7 +17,7 @@
 -module(wsock_handshake).
 -include("wsock.hrl").
 
--export([build/3, validate/2]).
+-export([open/3, handle_response/2]).
 -export([handle_open/1, response/1]).
 
 -define(VERSION, 13).
@@ -37,15 +37,50 @@ handle_open(Message) ->
       {error, ?INVALID_CLIENT_OPEN}
   end.
 
+-spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> boolean().
+handle_response(Response, Handshake) ->
+  validate_http_status(Response)
+  and
+  validate_upgrade_header(Response)
+  and
+  validate_connection_header(Response)
+  and
+  validate_sec_websocket_accept_header(Response, Handshake).
+
 -spec response(Fields:: list({string(), string()})) -> {ok, #handshake{}} | {error, atom()}.
 response(Fields) ->
   case get_value_insensitive("sec-websocket-key", Fields) of
     undefined ->
       {error, missing_field};
     Value ->
-      build_response(Value)
+      {ok, build_response(Value)}
   end.
 
+-spec open(Resource ::string(), Host ::string(), Port::integer()) -> {ok, #handshake{}}.
+open(Resource, Host, Port) ->
+  RequestLine = [
+    {method, "GET"},
+    {version, "1.1"},
+    {resource, Resource}
+  ],
+
+  Headers =[
+    {"Host", Host ++ ":" ++ integer_to_list(Port)},
+    {"Upgrade", "websocket"},
+    {"Connection", "upgrade"},
+    {"Sec-Websocket-Key", wsock_key:generate()},
+    {"Sec-Websocket-Version", integer_to_list(?VERSION)}
+  ],
+
+  Message = wsock_http:build(request, RequestLine, Headers),
+  #handshake{ version = ?VERSION, message = Message}.
+
+
+%=======================
+% INTERNAL FUNCTIONS
+%=======================
+
+-spec build_response(WebSocketKey::{string(), string()}) -> #handshake{}.
 build_response(WebSocketKey) ->
   BinaryKey = list_to_binary(WebSocketKey),
   HttpMessage = #http_message{
@@ -61,7 +96,7 @@ build_response(WebSocketKey) ->
     ]
   },
 
-  {ok, #handshake{ type = response, message = HttpMessage}}.
+  #handshake{ type = response, message = HttpMessage}.
 
 -spec validate_startline(StartLine::list({atom(), term()})) -> true | false.
 validate_startline(StartLine) ->
@@ -101,34 +136,7 @@ get_value_insensitive(Key, [{Name, Value} | Tail]) ->
 get_value_insensitive(_, []) ->
   undefined.
 
--spec build(Resource ::string(), Host ::string(), Port::integer()) -> #handshake{}.
-build(Resource, Host, Port) ->
-  RequestLine = [
-    {method, "GET"},
-    {version, "1.1"},
-    {resource, Resource}
-  ],
 
-  Headers =[
-    {"Host", Host ++ ":" ++ integer_to_list(Port)},
-    {"Upgrade", "websocket"},
-    {"Connection", "upgrade"},
-    {"Sec-Websocket-Key", wsock_key:generate()},
-    {"Sec-Websocket-Version", integer_to_list(?VERSION)}
-  ],
-
-  Message = wsock_http:build(request, RequestLine, Headers),
-  #handshake{ version = ?VERSION, message = Message}.
-
--spec validate(Response::#http_message{}, Handshake::#handshake{}) -> boolean().
-validate(Response, Handshake) ->
-  validate_http_status(Response)
-  and
-  validate_upgrade_header(Response)
-  and
-  validate_connection_header(Response)
-  and
-  validate_sec_websocket_accept_header(Response, Handshake).
 
 
 -spec validate_http_status(Response::#http_message{}) -> boolean().

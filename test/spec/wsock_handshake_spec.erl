@@ -20,44 +20,6 @@
 
 spec() ->
   describe("wsock_handshake", fun() ->
-        it("should return a valid handshake request", fun() ->
-              Resource  = "/",
-              Host     = "localhost",
-              Port      = 8080,
-
-              HandShake = wsock_handshake:build(Resource, Host, Port),
-              assert_that(HandShake#handshake.version, is(13)),
-
-              HttpMessage = HandShake#handshake.message,
-              assert_that(wsock_http:get_start_line_value(method, HttpMessage), is("GET")),
-              assert_that(wsock_http:get_start_line_value(version, HttpMessage), is("1.1")),
-              assert_that(wsock_http:get_start_line_value(resource, HttpMessage), is("/")),
-
-              assert_that(wsock_http:get_header_value("Host", HttpMessage), is(Host ++ ":" ++ integer_to_list(Port))),
-              assert_that(wsock_http:get_header_value("Upgrade", HttpMessage), is("websocket")),
-              assert_that(wsock_http:get_header_value("Connection", HttpMessage), is("upgrade")),
-              assert_that(wsock_http:get_header_value("Sec-Websocket-Key", HttpMessage), is_not(undefined)),
-              assert_that(wsock_http:get_header_value("Sec-Websocket-Version", HttpMessage), is("13"))
-          end),
-        it("should validate a handshake response", fun() ->
-              Resource = "/",
-              Host = "localhost",
-              Port = 8080,
-
-              HandShake = wsock_handshake:build(Resource, Host, Port),
-              Key = wsock_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
-
-              BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
-              Upgrade: websocket\r\n
-              Connection: upgrade\r\n
-              Sec-Websocket-Accept: ", fake_sec_websocket_accept(Key), "\r\n",
-              "Header-A: A\r\n
-              Header-C: 123123\r\n
-              Header-D: D\r\n\r\n"]),
-              Response = wsock_http:from_response(BinResponse),
-
-              assert_that(wsock_handshake:validate(Response, HandShake),is(true))
-          end),
         describe("handle_open", fun() ->
               it("should handle a open-handshake request from the client", fun() ->
                     BinRequest = list_to_binary(["GET / HTTP/1.1\r\n
@@ -100,8 +62,51 @@ spec() ->
                 assert_that(wsock_http:get_header_value("upgrade", Message), is("Websocket")),
                 assert_that(wsock_http:get_header_value("connection", Message), is("Upgrade")),
                 assert_that(wsock_http:get_header_value("sec-websocket-accept", Message), is(fake_sec_websocket_accept("AQIDBAUGBwgJCgsMDQ4PEA==")))
-            end)
-        end)
+            end),
+          it("should return an error if some of the required fields is missing")
+        end),
+        describe("open", fun() ->
+        it("should return a valid handshake request", fun() ->
+              Resource  = "/",
+              Host     = "localhost",
+              Port      = 8080,
+
+              HandShake = wsock_handshake:open(Resource, Host, Port),
+              assert_that(HandShake#handshake.version, is(13)),
+
+              HttpMessage = HandShake#handshake.message,
+              assert_that(wsock_http:get_start_line_value(method, HttpMessage), is("GET")),
+              assert_that(wsock_http:get_start_line_value(version, HttpMessage), is("1.1")),
+              assert_that(wsock_http:get_start_line_value(resource, HttpMessage), is("/")),
+
+              assert_that(wsock_http:get_header_value("Host", HttpMessage), is(Host ++ ":" ++ integer_to_list(Port))),
+              assert_that(wsock_http:get_header_value("Upgrade", HttpMessage), is("websocket")),
+              assert_that(wsock_http:get_header_value("Connection", HttpMessage), is("upgrade")),
+              assert_that(wsock_http:get_header_value("Sec-Websocket-Key", HttpMessage), is_not(undefined)),
+              assert_that(wsock_http:get_header_value("Sec-Websocket-Version", HttpMessage), is("13"))
+          end)
+          end),
+        describe("handle_response", fun() ->
+              it("should handle handshake response from a server", fun() ->
+              Resource = "/",
+              Host = "localhost",
+              Port = 8080,
+
+              HandShake = wsock_handshake:open(Resource, Host, Port),
+              Key = wsock_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
+
+              BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
+              Upgrade: websocket\r\n
+              Connection: upgrade\r\n
+              Sec-Websocket-Accept: ", fake_sec_websocket_accept(Key), "\r\n",
+              "Header-A: A\r\n
+              Header-C: 123123\r\n
+              Header-D: D\r\n\r\n"]),
+              {ok, Response} = wsock_http:decode(BinResponse, response),
+
+              assert_that(wsock_handshake:handle_response(Response, HandShake),is(true))
+          end)
+          end)
     end).
 
 fake_sec_websocket_accept(Key) ->
