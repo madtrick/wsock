@@ -84,6 +84,23 @@ spec() ->
                     {ok, Message} = wsock_http:decode(BinRequest, request),
                     {error, invalid_handshake_opening} = wsock_handshake:handle_open(Message)
                 end)
+          end),
+      describe("response", fun() ->
+                     it("should return a valid handshake response", fun() ->
+                {ok, Response} = wsock_handshake:response([{"sec-websocket-key", "AQIDBAUGBwgJCgsMDQ4PEA=="}]),
+
+                assert_that(is_record(Response, handshake), is(true)),
+                assert_that(Response#handshake.type, is(response)),
+
+                Message = Response#handshake.message,
+                assert_that(wsock_http:get_start_line_value(version, Message), is("1.1")),
+                assert_that(wsock_http:get_start_line_value(status, Message), is("101")),
+                assert_that(wsock_http:get_start_line_value(reason, Message), is("Switching protocols")),
+
+                assert_that(wsock_http:get_header_value("upgrade", Message), is("Websocket")),
+                assert_that(wsock_http:get_header_value("connection", Message), is("Upgrade")),
+                assert_that(wsock_http:get_header_value("sec-websocket-accept", Message), is(fake_sec_websocket_accept("AQIDBAUGBwgJCgsMDQ4PEA==")))
+            end)
         end)
     end).
 

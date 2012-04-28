@@ -18,7 +18,7 @@
 -include("wsock.hrl").
 
 -export([build/3, validate/2]).
--export([handle_open/1]).
+-export([handle_open/1, response/1]).
 
 -define(VERSION, 13).
 -define(GUID, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").
@@ -36,6 +36,32 @@ handle_open(Message) ->
     false ->
       {error, ?INVALID_CLIENT_OPEN}
   end.
+
+-spec response(Fields:: list({string(), string()})) -> {ok, #handshake{}} | {error, atom()}.
+response(Fields) ->
+  case get_value_insensitive("sec-websocket-key", Fields) of
+    undefined ->
+      {error, missing_field};
+    Value ->
+      build_response(Value)
+  end.
+
+build_response(WebSocketKey) ->
+  BinaryKey = list_to_binary(WebSocketKey),
+  HttpMessage = #http_message{
+    start_line = [
+      {version, "1.1"},
+      {status, "101"},
+      {reason, "Switching protocols"}
+    ],
+    headers = [
+      {"upgrade", "Websocket"},
+      {"connection", "Upgrade"},
+      {"sec-websocket-accept", base64:encode_to_string(crypto:sha(<<BinaryKey/binary, ?GUID>>)) }
+    ]
+  },
+
+  {ok, #handshake{ type = response, message = HttpMessage}}.
 
 -spec validate_startline(StartLine::list({atom(), term()})) -> true | false.
 validate_startline(StartLine) ->
