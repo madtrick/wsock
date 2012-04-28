@@ -72,6 +72,17 @@ spec() ->
 
                     assert_that(is_record(Response, handshake), is(true)),
                     assert_that(Response#handshake.type, is(handle_open))
+                end),
+              it("should return an error if the request isn't valid", fun() ->
+                    %Missing sec-websocket-key header
+                    BinRequest = list_to_binary(["GET / HTTP/1.1\r\n
+                        Host : server.example.org\r\n
+                        Upgrade : websocket\r\n
+                        Connection : Upgrade\r\n
+                        Sec-WebSocket-Version : 13\r\n\r\n
+                        "]),
+                    {ok, Message} = wsock_http:decode(BinRequest, request),
+                    {error, invalid_handshake_opening} = wsock_handshake:handle_open(Message)
                 end)
         end)
     end).
