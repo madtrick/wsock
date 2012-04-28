@@ -24,13 +24,15 @@
 -define(GUID, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").
 
 -define(INVALID_CLIENT_OPEN, invalid_handshake_opening).
+-define(INVALID_SERVER_RESPONSE, invalid_server_response).
 
 -spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, atom()}.
 handle_open(Message) ->
-  StartLine = Message#http_message.start_line,
-  Headers = Message#http_message.headers,
+  %StartLine = Message#http_message.start_line,
+  %Headers = Message#http_message.headers,
 
-  case validate_startline(StartLine) andalso validate_headers(Headers) of
+  case validate_handshake_open(Message) of
+  %case validate_startline(StartLine) andalso validate_headers(Headers) of
     true ->
       {ok , #handshake{ type = handle_open, message = Message}};
     false ->
@@ -39,13 +41,12 @@ handle_open(Message) ->
 
 -spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> boolean().
 handle_response(Response, Handshake) ->
-  validate_http_status(Response)
-  and
-  validate_upgrade_header(Response)
-  and
-  validate_connection_header(Response)
-  and
-  validate_sec_websocket_accept_header(Response, Handshake).
+  case validate_handshake_response(Response, Handshake) of
+    true ->
+      {ok, Response};
+    false ->
+      {error, ?INVALID_SERVER_RESPONSE}
+  end.
 
 -spec response(Fields:: list({string(), string()})) -> {ok, #handshake{}} | {error, atom()}.
 response(Fields) ->
@@ -124,6 +125,22 @@ validate_headers(Headers) ->
             match == re:run(Value, HeaderValue, [caseless, {capture, none}])
         end
     end, Matchers).
+
+-spec validate_handshake_response(Response::#http_message{}, OpenHandshake::#handshake{}) -> true | false.
+validate_handshake_response(Response, OpenHandshake) ->
+  validate_http_status(Response)
+  andalso
+  validate_upgrade_header(Response)
+  andalso
+  validate_connection_header(Response)
+  andalso
+  validate_sec_websocket_accept_header(Response, OpenHandshake).
+
+-spec validate_handshake_open(OpenHandshake::#http_message{}) -> true | false.
+validate_handshake_open(OpenHandshake) ->
+  validate_startline(OpenHandshake#http_message.start_line)
+  andalso
+  validate_headers(OpenHandshake#http_message.headers).
 
 get_value_insensitive(Key, [{Name, Value} | Tail]) ->
   case re:run(Name, "^" ++ Key ++ "$", [caseless, {capture, first, list}]) of

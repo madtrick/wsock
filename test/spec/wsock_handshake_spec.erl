@@ -104,7 +104,7 @@ spec() ->
               Header-D: D\r\n\r\n"]),
               {ok, Response} = wsock_http:decode(BinResponse, response),
 
-              assert_that(wsock_handshake:handle_response(Response, HandShake),is(true))
+              assert_that(wsock_handshake:handle_response(Response, HandShake),is({ok, Response}))
           end)
           end)
     end).
