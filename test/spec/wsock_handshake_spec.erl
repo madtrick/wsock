@@ -73,6 +73,7 @@ spec() ->
 
               HandShake = wsock_handshake:open(Resource, Host, Port),
               assert_that(HandShake#handshake.version, is(13)),
+              assert_that(HandShake#handshake.type, is(open)),
 
               HttpMessage = HandShake#handshake.message,
               assert_that(wsock_http:get_start_line_value(method, HttpMessage), is("GET")),
@@ -92,8 +93,8 @@ spec() ->
               Host = "localhost",
               Port = 8080,
 
-              HandShake = wsock_handshake:open(Resource, Host, Port),
-              Key = wsock_http:get_header_value("sec-websocket-key", HandShake#handshake.message),
+              OpenHandShake = wsock_handshake:open(Resource, Host, Port),
+              Key = wsock_http:get_header_value("sec-websocket-key", OpenHandShake#handshake.message),
 
               BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
               Upgrade: websocket\r\n
@@ -103,8 +104,10 @@ spec() ->
               Header-C: 123123\r\n
               Header-D: D\r\n\r\n"]),
               {ok, Response} = wsock_http:decode(BinResponse, response),
-
-              assert_that(wsock_handshake:handle_response(Response, HandShake),is({ok, Response}))
+              
+              {ok, Handshake} = wsock_handshake:handle_response(Response, OpenHandShake),
+              assert_that(Handshake#handshake.type, is(handle_response)),
+              assert_that(Handshake#handshake.message, is(Response))
           end)
           end)
     end).

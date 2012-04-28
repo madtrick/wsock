@@ -28,11 +28,7 @@
 
 -spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, atom()}.
 handle_open(Message) ->
-  %StartLine = Message#http_message.start_line,
-  %Headers = Message#http_message.headers,
-
   case validate_handshake_open(Message) of
-  %case validate_startline(StartLine) andalso validate_headers(Headers) of
     true ->
       {ok , #handshake{ type = handle_open, message = Message}};
     false ->
@@ -43,7 +39,7 @@ handle_open(Message) ->
 handle_response(Response, Handshake) ->
   case validate_handshake_response(Response, Handshake) of
     true ->
-      {ok, Response};
+      {ok, #handshake{ type = handle_response, message = Response}};
     false ->
       {error, ?INVALID_SERVER_RESPONSE}
   end.
@@ -74,7 +70,7 @@ open(Resource, Host, Port) ->
   ],
 
   Message = wsock_http:build(request, RequestLine, Headers),
-  #handshake{ version = ?VERSION, message = Message}.
+  #handshake{ version = ?VERSION, type = open, message = Message}.
 
 
 %=======================
