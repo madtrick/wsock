@@ -44,14 +44,23 @@ handle_response(Response, Handshake) ->
       {error, ?INVALID_SERVER_RESPONSE}
   end.
 
--spec response(Fields:: list({string(), string()})) -> {ok, #handshake{}} | {error, atom()}.
-response(Fields) ->
-  case get_value_insensitive("sec-websocket-key", Fields) of
-    undefined ->
-      {error, missing_field};
-    Value ->
-      {ok, build_response(Value)}
-  end.
+-spec response(ClientWebsocketKey::string()) -> {ok, #handshake{}}.
+response(ClientWebsocketKey) ->
+  BinaryKey = list_to_binary(ClientWebsocketKey),
+  HttpMessage = #http_message{
+    start_line = [
+      {version, "1.1"},
+      {status, "101"},
+      {reason, "Switching protocols"}
+    ],
+    headers = [
+      {"upgrade", "Websocket"},
+      {"connection", "Upgrade"},
+      {"sec-websocket-accept", base64:encode_to_string(crypto:sha(<<BinaryKey/binary, ?GUID>>)) }
+    ]
+  },
+
+  {ok, #handshake{ type = response, message = HttpMessage}}.
 
 -spec open(Resource ::string(), Host ::string(), Port::integer()) -> {ok, #handshake{}}.
 open(Resource, Host, Port) ->
@@ -76,24 +85,6 @@ open(Resource, Host, Port) ->
 %=======================
 % INTERNAL FUNCTIONS
 %=======================
-
--spec build_response(WebSocketKey::{string(), string()}) -> #handshake{}.
-build_response(WebSocketKey) ->
-  BinaryKey = list_to_binary(WebSocketKey),
-  HttpMessage = #http_message{
-    start_line = [
-      {version, "1.1"},
-      {status, "101"},
-      {reason, "Switching protocols"}
-    ],
-    headers = [
-      {"upgrade", "Websocket"},
-      {"connection", "Upgrade"},
-      {"sec-websocket-accept", base64:encode_to_string(crypto:sha(<<BinaryKey/binary, ?GUID>>)) }
-    ]
-  },
-
-  #handshake{ type = response, message = HttpMessage}.
 
 -spec validate_startline(StartLine::list({atom(), term()})) -> true | false.
 validate_startline(StartLine) ->

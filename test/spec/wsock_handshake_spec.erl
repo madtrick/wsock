@@ -49,7 +49,7 @@ spec() ->
           end),
       describe("response", fun() ->
                      it("should return a valid handshake response", fun() ->
-                {ok, Response} = wsock_handshake:response([{"sec-websocket-key", "AQIDBAUGBwgJCgsMDQ4PEA=="}]),
+                {ok, Response} = wsock_handshake:response("AQIDBAUGBwgJCgsMDQ4PEA=="),
 
                 assert_that(is_record(Response, handshake), is(true)),
                 assert_that(Response#handshake.type, is(response)),
