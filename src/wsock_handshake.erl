@@ -46,18 +46,21 @@ validate_startline(StartLine) ->
 
 validate_headers(Headers) ->
   Matchers = [
-    {"host", ".+"},
-    {"upgrade", "websocket"},
-    {"connection", "upgrade"},
-    {"sec-websocket-key", "[a-z0-9\+\/]{22}=="},
-    {"sec-websocket-version", "13"}],
+    {"host", ".+", required},
+    {"upgrade", "websocket", required},
+    {"connection", "upgrade", required},
+    {"sec-websocket-key", "[a-z0-9\+\/]{22}==", required},
+    {"sec-websocket-version", "13", required},
+    {"origin", ".+", optional}],
 
-  lists:all(fun({HeaderName, HeaderValue}) ->
+  lists:all(fun({HeaderName, HeaderValue, Type}) ->
         case get_value_insensitive(HeaderName, Headers) of
-          Value ->
-            match == re:run(Value, HeaderValue, [caseless, {capture, none}]);
+          undefined when (Type == optional) ->
+            true;
           undefined ->
-            false
+            false;
+          Value ->
+            match == re:run(Value, HeaderValue, [caseless, {capture, none}])
         end
     end, Matchers).
 
