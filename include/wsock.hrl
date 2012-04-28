@@ -6,7 +6,7 @@
 
 -record(handshake, {
     version      :: integer(),
-    type :: handle_open,
+    type :: handle_open | handle_response | open | response,
     message :: #http_message{}
   }).
 
