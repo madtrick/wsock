@@ -18,7 +18,7 @@
 -include("wsock.hrl").
 
 spec() ->
-  describe("wsock_http", fun() ->
+        describe("build", fun() ->
         it("should build proper HTTP messages", fun() ->
               RequestLine = [
                 {method, "GET"},
@@ -40,29 +40,9 @@ spec() ->
               assert_that(proplists:get_value(resource, Message#http_message.start_line), is("/")),
               assert_that(proplists:get_value("Header-A", Message#http_message.headers), is("A")),
               assert_that(proplists:get_value("Header-B", Message#http_message.headers), is("B"))
+          end)
           end),
-        %it("should build proper HTTP request strings", fun() ->
-        %      RequestLine = [
-        %        {method, "GET"},
-        %        {version, "1.1"},
-        %        {resource, "/"}
-        %      ],
-
-        %      Headers = [
-        %        {"Header-A", "A"},
-        %        {"Header-B", "B"}
-        %      ],
-
-        %      Message = wsock_http:build(request, RequestLine, Headers),
-        %      Request = wsock_http:to_request(Message),
-
-        %      assert_that(Request, is([
-        %            "GET / HTTP/1.1\r\n",
-        %            "Header-A: A\r\n",
-        %            "Header-B: B\r\n",
-        %            "\r\n"
-        %          ]))
-        %  end),
+        describe("get_start_line_value", fun() ->
         it("should return http_message start_line values if present", fun() ->
               Message = #http_message{
                 type = request,
@@ -80,7 +60,9 @@ spec() ->
               assert_that(wsock_http:get_start_line_value(version, Message), is("1.1")),
               assert_that(wsock_http:get_start_line_value(method, Message), is("GET")),
               assert_that(wsock_http:get_start_line_value(resource, Message), is("/"))
+          end)
           end),
+        describe("get_header_value", fun() ->
         it("should return http_message header values if present", fun() ->
               Message = #http_message{
                 type = request,
@@ -97,6 +79,7 @@ spec() ->
 
               assert_that(wsock_http:get_header_value("header-a", Message), is("A")),
               assert_that(wsock_http:get_header_value("header-b", Message), is("b"))
+          end)
           end),
         describe("encode", fun() ->
           describe("requests", fun() ->
@@ -239,5 +222,4 @@ spec() ->
               assert_that(Response, is({error, malformed_request}))
           end)
     end)
-end)
 end).
