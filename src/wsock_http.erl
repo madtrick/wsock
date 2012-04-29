@@ -44,35 +44,17 @@ build(Type, StartLine, Headers) ->
 
 -spec encode(Message::#http_message{}) -> list(string()).
 encode(Message) ->
-  encode(Message, Message#http_message.type).
-
--spec encode(Message::#http_message{}, Type:: request | response) -> list(string()).
-encode(Message, request) ->
-  build_request_line(
-    Message#http_message.start_line,
-    build_headers(Message#http_message.headers, ["\r\n"])
-  );
-
-encode(Message, response) ->
-  Version = wsock_http:get_start_line_value(version, Message),
-  Status  = wsock_http:get_start_line_value(status, Message),
-  Reason = wsock_http:get_start_line_value(reason, Message),
+  Startline = Message#http_message.start_line,
   Headers = Message#http_message.headers,
+  encode(Startline, Headers, Message#http_message.type).
 
-  ["HTTP/" ++ Version ++ " " ++ Status ++ " " ++ Reason ++ "\r\n" | build_headers(Headers, ["\r\n"])].
--spec build_headers(list({HeaderName::string(), HeaderValue::string()}), list(string())) -> list(string()).
-build_headers(Headers, Acc) ->
-  lists:foldr(fun({Key, Value}, AccIn) ->
-        [ Key ++ ": " ++ Value ++ "\r\n" | AccIn]
-    end, Acc, Headers).
+-spec encode(Startline::list({atom(), string()}), Headers::list({string(), string()}), Type:: request | response) -> list(string()).
+encode(Startline, Headers, request) ->
+  encode_message("{{method}} {{resource}} HTTP/{{version}}", Startline, Headers);
 
--spec build_request_line(list({Name::atom(), Value::string()}), list(string())) -> list(string()).
-build_request_line(RequestLine, Acc) ->
-  Method   = proplists:get_value(method, RequestLine),
-  Version  = proplists:get_value(version, RequestLine),
-  Resource = proplists:get_value(resource, RequestLine),
+encode(Startline, Headers, response) ->
+  encode_message("HTTP/{{version}} {{status}} {{reason}}", Startline, Headers).
 
-  [Method ++ " " ++ Resource ++ " " ++ "HTTP/" ++ Version ++ "\r\n" | Acc].
 
 -spec get_start_line_value(Key::atom(), Message::#http_message{}) -> string().
 get_start_line_value(Key, Message) ->
@@ -146,3 +128,21 @@ process_headers([Header | Tail], Acc) ->
 process_headers([], Acc) ->
   {ok, Acc}.
 
+encode_message(StartlineExpr, StartlineFields, Headers) ->
+  SL = build_start_line(StartlineExpr, StartlineFields),
+  H= build_headers(Headers),
+
+  lists:foldr(fun(El, Acc) ->
+        [El++"\r\n" | Acc]
+    end, ["\r\n"], [SL | H]).
+
+build_start_line(StartlineExpr, StartlineFields) ->
+  lists:foldr(fun({Key, Value}, Acc) ->
+        re:replace(Acc, "{{" ++ atom_to_list(Key) ++ "}}", Value, [{return, list}])
+    end, StartlineExpr, StartlineFields).
+
+-spec build_headers(list({HeaderName::string(), HeaderValue::string()})) -> list(string()).
+build_headers(Headers) ->
+  lists:map(fun({Key, Value}) ->
+        Key ++ ": " ++ Value
+    end, Headers).
