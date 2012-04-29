@@ -41,28 +41,28 @@ spec() ->
               assert_that(proplists:get_value("Header-A", Message#http_message.headers), is("A")),
               assert_that(proplists:get_value("Header-B", Message#http_message.headers), is("B"))
           end),
-        it("should build proper HTTP request strings", fun() ->
-              RequestLine = [
-                {method, "GET"},
-                {version, "1.1"},
-                {resource, "/"}
-              ],
+        %it("should build proper HTTP request strings", fun() ->
+        %      RequestLine = [
+        %        {method, "GET"},
+        %        {version, "1.1"},
+        %        {resource, "/"}
+        %      ],
 
-              Headers = [
-                {"Header-A", "A"},
-                {"Header-B", "B"}
-              ],
+        %      Headers = [
+        %        {"Header-A", "A"},
+        %        {"Header-B", "B"}
+        %      ],
 
-              Message = wsock_http:build(request, RequestLine, Headers),
-              Request = wsock_http:to_request(Message),
+        %      Message = wsock_http:build(request, RequestLine, Headers),
+        %      Request = wsock_http:to_request(Message),
 
-              assert_that(Request, is([
-                    "GET / HTTP/1.1\r\n",
-                    "Header-A: A\r\n",
-                    "Header-B: B\r\n",
-                    "\r\n"
-                  ]))
-          end),
+        %      assert_that(Request, is([
+        %            "GET / HTTP/1.1\r\n",
+        %            "Header-A: A\r\n",
+        %            "Header-B: B\r\n",
+        %            "\r\n"
+        %          ]))
+        %  end),
         it("should return http_message start_line values if present", fun() ->
               Message = #http_message{
                 type = request,
@@ -97,6 +97,59 @@ spec() ->
 
               assert_that(wsock_http:get_header_value("header-a", Message), is("A")),
               assert_that(wsock_http:get_header_value("header-b", Message), is("b"))
+          end),
+        describe("encode", fun() ->
+          describe("requests", fun() ->
+                it("should return a string representating a http request", fun() ->
+              RequestLine = [
+                {method, "GET"},
+                {version, "1.1"},
+                {resource, "/"}
+              ],
+
+              Headers = [
+                {"Header-A", "A"},
+                {"Header-B", "B"}
+              ],
+
+              %Message = wsock_http:build(request, RequestLine, Headers),
+              Message = #http_message{ type = request, start_line = RequestLine, headers = Headers },
+              Request = wsock_http:encode(Message),
+
+              assert_that(Request, is([
+                    "GET / HTTP/1.1\r\n",
+                    "Header-A: A\r\n",
+                    "Header-B: B\r\n",
+                    "\r\n"
+                  ]))
+                  end),
+                it("should return an error if some field is missing")
+            end),
+          describe("responses", fun() ->
+                it("should return a string representating a http response", fun() ->
+                      StartLine = [
+                        {version, "1.1"},
+                        {status, "101"},
+                        {reason, "Switching protocols"}
+                      ],
+
+                      Headers = [
+                        {"Header-A", "A"},
+                        {"Header-B", "B"}
+                      ],
+
+                      Message = #http_message{ type = response, start_line = StartLine, headers = Headers},
+                      Response = wsock_http:encode(Message),
+
+                      assert_that(Response, is([
+                            "HTTP/1.1 101 Switching protocols\r\n",
+                          "Header-A: A\r\n",
+                          "Header-B: B\r\n",
+                          "\r\n"])
+                    )
+                  end),
+                it("should return an error if some field is missing")
+            end)
           end),
         describe("decode", fun()->
               describe("requests", fun() ->

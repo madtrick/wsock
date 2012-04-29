@@ -17,8 +17,8 @@
 -module(wsock_http).
 -include("wsock.hrl").
 
--export([build/3, to_request/1, get_start_line_value/2, get_header_value/2]).
--export([decode/2]).
+-export([build/3, get_start_line_value/2, get_header_value/2]).
+-export([decode/2, encode/1]).
 
 -define(CTRL, "\r\n").
 
@@ -42,13 +42,24 @@ decode(Data, Type) ->
 build(Type, StartLine, Headers) ->
   #http_message{type = Type, start_line = StartLine, headers = Headers}.
 
--spec to_request(Message::#http_message{}) -> list(string()).
-to_request(Message) ->
+-spec encode(Message::#http_message{}) -> list(string()).
+encode(Message) ->
+  encode(Message, Message#http_message.type).
+
+-spec encode(Message::#http_message{}, Type:: request | response) -> list(string()).
+encode(Message, request) ->
   build_request_line(
     Message#http_message.start_line,
     build_headers(Message#http_message.headers, ["\r\n"])
-  ).
+  );
 
+encode(Message, response) ->
+  Version = wsock_http:get_start_line_value(version, Message),
+  Status  = wsock_http:get_start_line_value(status, Message),
+  Reason = wsock_http:get_start_line_value(reason, Message),
+  Headers = Message#http_message.headers,
+
+  ["HTTP/" ++ Version ++ " " ++ Status ++ " " ++ Reason ++ "\r\n" | build_headers(Headers, ["\r\n"])].
 -spec build_headers(list({HeaderName::string(), HeaderValue::string()}), list(string())) -> list(string()).
 build_headers(Headers, Acc) ->
   lists:foldr(fun({Key, Value}, AccIn) ->
