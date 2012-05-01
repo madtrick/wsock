@@ -15,7 +15,7 @@
 %% @hidden
 
 -module(wsock_framing).
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 -export([to_binary/1, from_binary/1, frame/1, frame/2]).
 
@@ -136,13 +136,27 @@ frame({CloseCode, Reason}, Options) ->
   Data = <<CloseCode:16, BinReason/binary>>,
   frame(Data, Options);
 
+%frame(Data, Options) ->
+%  Frame = #frame{},
+%  Frame2 = length(Frame, Data),
+%  Frame3 = mask(Frame2, Data),
+%  apply_options(Frame3, Options).
+
 frame(Data, Options) ->
-  Frame = #frame{},
+  Frame = #frame{ payload = Data},
   Frame2 = length(Frame, Data),
-  Frame3 = mask(Frame2, Data),
-  apply_options(Frame3, Options).
+  apply_options(Frame2, Options).
 
 -spec apply_options(Frame::#frame{}, Options::list()) -> #frame{}.
+apply_options(Frame, [mask | Tail]) ->
+  <<MaskKey:32>> = crypto:rand_bytes(4),
+  T = Frame#frame{
+    mask = 1,
+    masking_key = MaskKey,
+    payload = mask(Frame#frame.payload, MaskKey, <<>>)
+  },
+  apply_options(T, Tail);
+
 apply_options(Frame, [fin | Tail]) ->
   T = Frame#frame{fin = 1},
   apply_options(T, Tail);

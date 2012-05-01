@@ -20,6 +20,8 @@
 
 spec() ->
   describe("to_binary", fun() ->
+        it("should not include mask field if the frame is unmasked"),
+        it("should include mask field if the frame is masked"),
         describe("payload length <= 125", fun()->
               it("should return a binary representation of a frame", fun()->
                     Data = "Foo bar",
@@ -224,6 +226,13 @@ spec() ->
               it("should set opcode to binary on binary data", fun()->
                     Frame = wsock_framing:frame(<<"Foo bar">>),
                     assert_that(Frame#frame.opcode, is(2))
+                end),
+              it("should leave data unmasked", fun() ->
+                    Data = "Fofito",
+                    Frame = wsock_framing:frame(Data),
+                    assert_that(Frame#frame.mask, is(0)),
+                    assert_that(Frame#frame.payload, is(list_to_binary(Data))),
+                    assert_that(Frame#frame.masking_key, is(undefined))
                 end)
           end),
         describe("when options are passed", fun()->
@@ -255,6 +264,12 @@ spec() ->
               it("should set opcode to continuation if opcode option is continuation", fun()->
                     Frame = wsock_framing:frame("Foo bar", [{opcode, continuation}]),
                     assert_that(Frame#frame.opcode, is(0))
+                end),
+              it("should mask data if 'mask' option is present", fun() ->
+                    Data = list_to_binary("Era unha jrota"),
+                    Frame = wsock_framing:frame(Data, [mask]),
+                    assert_that(Frame#frame.mask, is(1)),
+                    assert_that(Frame#frame.payload, is(mask(Data, Frame#frame.masking_key, <<>>)))
                 end)
           end),
         describe("text data", fun()->
@@ -287,7 +302,8 @@ spec() ->
                           Data = "Foo bar",
                           Frame = wsock_framing:frame(Data),
                           assert_that(Frame#frame.extended_payload_len, is(0))
-                      end),
+                        %)                     end),
+                    end),
                     it("should set 0 in extended payload length cont.", fun()->
                           Data = "Foo bar",
                           Frame = wsock_framing:frame(Data),

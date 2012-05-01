@@ -18,7 +18,7 @@
     rsv2 = 0 :: bit(),
     rsv3 = 0 :: bit(),
     opcode :: byte(),
-    mask :: bit(),
+    mask = 0 :: bit(),
     payload_len :: byte(),
     extended_payload_len :: byte(),
     extended_payload_len_cont :: integer(),
