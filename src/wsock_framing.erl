@@ -39,16 +39,18 @@ to_binary(Frame) ->
   >>,
 
   Bin2 = case Frame#frame.masking_key of
-    undefined -> Bin1;
+    undefined -> 
+      Bin1;
     Key ->
       <<Bin1/binary, Key:32>>
   end,
 
-  case Frame#frame.payload of
-    undefined -> Bin2;
-    Payload ->
-      <<Bin2/binary, Payload/binary>>
-  end.
+  %case Frame#frame.payload of
+  %  undefined -> Bin2;
+  %  Payload ->
+  %    <<Bin2/binary, Payload/binary>>
+  %end.
+  <<Bin2/binary, (Frame#frame.payload)/binary>>.
 
     %(Frame#frame.masking_key):32,
     %(Frame#frame.payload)/binary
@@ -213,19 +215,19 @@ length(Frame, Data) ->
       }
   end.
 
--spec mask(Frame::#frame{}, Data::binary()) -> #frame{}.
-mask(Frame, <<>>) ->
-  Frame#frame{mask = 0};
+%-spec mask(Frame::#frame{}, Data::binary()) -> #frame{}.
+%mask(Frame, <<>>) ->
+%  Frame#frame{mask = 0};
 
-mask(Frame, Data) ->
-  <<MaskKey:32>> = crypto:rand_bytes(4),
-  %BinData = list_to_binary(Data),
+%mask(Frame, Data) ->
+%  <<MaskKey:32>> = crypto:rand_bytes(4),
+%  %BinData = list_to_binary(Data),
 
-  Frame#frame{
-    mask = 1,
-    masking_key = MaskKey,
-    payload = mask(Data, MaskKey, <<>>)
-  }.
+%  Frame#frame{
+%    mask = 1,
+%    masking_key = MaskKey,
+%    payload = mask(Data, MaskKey, <<>>)
+%  }.
 
 
 %
