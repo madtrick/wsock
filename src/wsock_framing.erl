@@ -39,21 +39,13 @@ to_binary(Frame) ->
   >>,
 
   Bin2 = case Frame#frame.masking_key of
-    undefined -> 
+    undefined ->
       Bin1;
     Key ->
       <<Bin1/binary, Key:32>>
   end,
 
-  %case Frame#frame.payload of
-  %  undefined -> Bin2;
-  %  Payload ->
-  %    <<Bin2/binary, Payload/binary>>
-  %end.
   <<Bin2/binary, (Frame#frame.payload)/binary>>.
-
-    %(Frame#frame.masking_key):32,
-    %(Frame#frame.payload)/binary
 
 -spec from_binary(Data::binary()) -> list(#frame{}).
 from_binary(Data) ->
@@ -138,11 +130,6 @@ frame({CloseCode, Reason}, Options) ->
   Data = <<CloseCode:16, BinReason/binary>>,
   frame(Data, Options);
 
-%frame(Data, Options) ->
-%  Frame = #frame{},
-%  Frame2 = length(Frame, Data),
-%  Frame3 = mask(Frame2, Data),
-%  apply_options(Frame3, Options).
 
 frame(Data, Options) ->
   Frame = #frame{ payload = Data},
@@ -192,7 +179,6 @@ apply_options(Frame, []) ->
 
 -spec length(Frame::#frame{}, Data :: binary()) -> #frame{}.
 length(Frame, Data) ->
-  %Len = string:len(Data),
   Len = byte_size(Data),
   if
     Len =< 125 ->
@@ -214,20 +200,6 @@ length(Frame, Data) ->
         extended_payload_len_cont = Len
       }
   end.
-
-%-spec mask(Frame::#frame{}, Data::binary()) -> #frame{}.
-%mask(Frame, <<>>) ->
-%  Frame#frame{mask = 0};
-
-%mask(Frame, Data) ->
-%  <<MaskKey:32>> = crypto:rand_bytes(4),
-%  %BinData = list_to_binary(Data),
-
-%  Frame#frame{
-%    mask = 1,
-%    masking_key = MaskKey,
-%    payload = mask(Data, MaskKey, <<>>)
-%  }.
 
 
 %
