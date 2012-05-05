@@ -21,26 +21,35 @@
 
 spec() ->
   describe("encode", fun() ->
-        before_all(fun()->
+        before_each(fun()->
               meck:new(wsock_framing, [passthrough])
           end),
 
-        after_all(fun()->
+        after_each(fun()->
               meck:unload(wsock_framing)
           end),
 
+        it("should return an error if no datatype option is given"),
+        it("should mask data if 'mask' option is present", fun() ->
+              wsock_message:encode("asdasda", [text ,mask]),
+              [_Data, Options] = meck_arguments(wsock_framing, frame),
+              assert_that(proplists:get_value(mask, Options), is(true))
+          end),
+        it("should not mask data if 'mask' option is not preset"),
         it("should set opcode to 'text' if type is text", fun() ->
-              wsock_message:encode("asadsd", text),
-              assert_that(meck:called(wsock_framing, frame, ['_', [fin, {opcode, text}]]), is(true))
+              wsock_message:encode("asadsd", [text]),
+              [_Data, Options] = meck_arguments(wsock_framing, frame),
+              assert_that(proplists:get_value(opcode, Options), is(text))
           end),
         it("should set opcode to 'binary' if type is binary", fun() ->
-              wsock_message:encode(<<"asdasd">>, binary),
-              assert_that(meck:called(wsock_framing, frame, ['_', [fin, {opcode, binary}]]), is(true))
+              wsock_message:encode(<<"asdasd">>, [binary]),
+              [_Data, Options] = meck_arguments(wsock_framing, frame),
+              assert_that(proplists:get_value(opcode, Options), is(binary))
           end),
         describe("when payload size is <= fragment size", fun()->
               it("should return a list with only one binary fragment", fun()->
                     Data = "Foo bar",
-                    [BinFrame | []] = wsock_message:encode(Data, text),
+                    [BinFrame | []] = wsock_message:encode(Data, [text]),
                     assert_that(byte_size(list_to_binary(Data)),is(less_than(?FRAGMENT_SIZE))),
                     assert_that(is_binary(BinFrame), is(true)),
                     assert_that(meck:called(wsock_framing, to_binary, '_'), is(true)),
@@ -48,7 +57,7 @@ spec() ->
                 end),
               it("should set opcode to 'type'", fun() ->
                     Data = "Foo bar",
-                    [Frame] = wsock_message:encode(Data, text),
+                    [Frame] = wsock_message:encode(Data, [text]),
 
                     <<_:4, Opcode:4, _/binary>> = Frame,
 
@@ -56,7 +65,7 @@ spec() ->
                 end),
               it("should set fin", fun()->
                     Data = "Foo bar",
-                    [Frame] = wsock_message:encode(Data, text),
+                    [Frame] = wsock_message:encode(Data, [text]),
 
                     <<Fin:1, _/bits>> = Frame,
 
@@ -66,28 +75,29 @@ spec() ->
         describe("when payload size is > fragment size", fun() ->
               it("should return a list of binary fragments", fun()->
                     Data = crypto:rand_bytes(5000),
-                    Frames = wsock_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, [binary]),
                     assert_that(meck:called(wsock_framing, to_binary, '_'), is(true)),
                     assert_that(meck:called(wsock_framing, frame, '_'), is(true)),
                     assert_that(length(Frames), is(2))
                 end),
+              it("should set correctly payload len"),
               it("should set a payload of 4096 bytes or less on each fragment", fun() ->
-                    Data = crypto:rand_bytes(12288),
-                    Frames = wsock_message:encode(Data, binary),
+                    Data = crypto:rand_bytes(?FRAGMENT_SIZE*3),
+                    Frames = wsock_message:encode(Data, [binary]),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
-                    <<_:64, Payload1/binary>> = Frame1,
-                    <<_:64, Payload2/binary>> = Frame2,
-                    <<_:64, Payload3/binary>> = Frame3,
+                    <<_:32, Payload1/binary>> = Frame1,
+                    <<_:32, Payload2/binary>> = Frame2,
+                    <<_:32, Payload3/binary>> = Frame3,
 
-                    assert_that(byte_size(Payload1), is(4096)),
-                    assert_that(byte_size(Payload2), is(4096)),
-                    assert_that(byte_size(Payload3), is(4096))
+                    assert_that(byte_size(Payload1), is(?FRAGMENT_SIZE)),
+                    assert_that(byte_size(Payload2), is(?FRAGMENT_SIZE)),
+                    assert_that(byte_size(Payload3), is(?FRAGMENT_SIZE))
                 end),
               it("should set opcode to 'type' on the first fragment", fun()->
                     Data = crypto:rand_bytes(5000),
-                    Frames = wsock_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, [binary]),
 
                     [FirstFragment | _ ] = Frames,
 
@@ -97,7 +107,7 @@ spec() ->
                 end),
               it("should unset fin on all fragments but last", fun() ->
                     Data = crypto:rand_bytes(12288), %4096 * 3
-                    Frames = wsock_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, [binary]),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
@@ -111,7 +121,7 @@ spec() ->
                 end),
               it("should set opcode to 'continuation' on all fragments but first", fun() ->
                     Data = crypto:rand_bytes(12288), %4096 * 3
-                    Frames = wsock_message:encode(Data, binary),
+                    Frames = wsock_message:encode(Data, [binary]),
 
                     [Frame1, Frame2, Frame3] = Frames,
 
@@ -127,10 +137,10 @@ spec() ->
         describe("control messages", fun() ->
               describe("close", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsock_message:encode([], close)
+                          [_Frame] = wsock_message:encode([], [close])
                       end),
                     it("should return a close frame", fun() ->
-                          [Frame] = wsock_message:encode([], close),
+                          [Frame] = wsock_message:encode([], [close]),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -139,17 +149,17 @@ spec() ->
                           assert_that(Opcode, is(8))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsock_message:encode({1004, "Chapando el garito"}, close),
+                          [Frame] = wsock_message:encode({1004, "Chapando el garito"}, [mask, close]),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, _PayloadLen:7, _Mask:32, _Payload/binary>> = Frame
                       end)
                 end),
               describe("ping", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsock_message:encode([], ping)
+                          [_Frame] = wsock_message:encode([], [ping])
                       end),
                     it("should return a ping frame", fun() ->
-                          [Frame] = wsock_message:encode([], ping),
+                          [Frame] = wsock_message:encode([], [ping]),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -158,17 +168,17 @@ spec() ->
                           assert_that(Opcode, is(9))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsock_message:encode("1234", ping),
+                          [Frame] = wsock_message:encode("1234", [mask, ping]),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, 4:7, _Mask:32, _Payload:4/binary>> = Frame
                       end)
                 end),
               describe("pong", fun() ->
                     it("should return a list of one frame", fun() ->
-                          [_Frame] = wsock_message:encode([], pong)
+                          [_Frame] = wsock_message:encode([], [pong])
                       end),
                     it("should return a ping frame", fun() ->
-                          [Frame] = wsock_message:encode([], pong),
+                          [Frame] = wsock_message:encode([], [pong]),
 
                           <<Fin:1, Rsv:3, Opcode:4, _/binary>> = Frame,
 
@@ -177,7 +187,7 @@ spec() ->
                           assert_that(Opcode, is(10))
                       end),
                     it("should attach application payload", fun() ->
-                          [Frame] = wsock_message:encode("1234", pong),
+                          [Frame] = wsock_message:encode("1234", [mask, pong]),
 
                           <<_Fin:1, _Rsv:3, _Opcode:4, 1:1, 4:7, _Mask:32, _Payload:4/binary>> = Frame
                       end)
@@ -443,3 +453,9 @@ get_binary_frame(Fin, Rsv1, Rsv2, Rsv3, Opcode, Mask, Length, ExtendedPayloadLen
     _ ->
       <<Head/binary, Payload/binary>>
   end.
+
+meck_arguments(Module, Function) ->
+  History = meck:history(Module),
+
+  [Args] = [ X || {_, {_, F, X}, _} <- History, F == Function],
+  Args.

@@ -18,16 +18,31 @@
 -include("wsock.hrl").
 
 -export([encode/2, decode/1, decode/2]).
+%-export([encode/3]).
 
 -define(FRAGMENT_SIZE, 4096).
 -type message_type() :: begin_message | continue_message.
 
--spec encode(Data::string() | binary(), Type::atom()) -> binary().
-encode(Data, Type) when is_list(Data)->
-  encode(list_to_binary(Data), Type);
+-spec encode(Data::string() | binary(), Options::list()) -> binary().
+encode(Data, Options) when is_list(Data) ->
+  encode(list_to_binary(Data), Options);
 
-encode(Data, Type)->
-  lists:reverse(encode(Data, Type, [])).
+encode(Data, Options) ->
+  {Type, BaseOptions} = extract_type(Options),
+  lists:reverse(encode(Data, Type, BaseOptions, [])).
+
+extract_type(Options) ->
+  Types = [text, binary, close, ping, pong],
+  Type = lists:filter(fun(E) ->
+        true == proplists:get_value(E, Options)
+    end, Types),
+
+  case Type of
+    [] -> error;
+    [T] ->
+      OptionsWithoutType = proplists:delete(T, Options),
+      {T, OptionsWithoutType}
+  end.
 
 -spec decode(Data::binary()) -> list(#message{}).
 decode(Data) ->
@@ -38,29 +53,23 @@ decode(Data, Message) ->
   decode(Data, continue_message, Message).
 
 
-%
-% Internal
-%
--spec encode(Data::binary(), Type :: atom(), Acc ::list()) -> list().
-encode(Data, Type, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
-  [frame(Data, [fin, {opcode, Type}])];
-  %Frame = wsock_framing:frame(Data, [fin, {opcode, Type}]),
-  %wsock_framing:to_binary(Frame);
+encode(Data, Type, BaseOptions, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
+  [frame(Data, [ fin, {opcode, Type} | BaseOptions])];
 
-encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, Acc) ->
-  [frame(Data, [fin, {opcode, Type}]) | Acc];
+encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, BaseOptions, Acc) ->
+  [frame(Data, [fin, {opcode, Type} | BaseOptions]) | Acc];
 
-encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, []) ->
-  encode(Rest, continuation, [frame(Data, [{opcode, Type}]) | []]);
+encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, BaseOptions, []) ->
+  encode(Rest, continuation, BaseOptions, [frame(Data, [{opcode, Type} | BaseOptions]) | []]);
 
-encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, Acc) ->
-  encode(Rest, Type, [frame(Data, [{opcode, Type}]) | Acc]);
+encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, BaseOptions, Acc) ->
+  encode(Rest, Type, BaseOptions, [frame(Data, [{opcode, Type} | BaseOptions]) | Acc]);
 
-encode(<<>>, _Type, Acc) ->
+encode(<<>>, _Type, Options, Acc) ->
   Acc;
 
-encode(<<Data/binary>>, Type, Acc) ->
-  [frame(Data, [fin, {opcode, Type}]) | Acc].
+encode(<<Data/binary>>, Type, BaseOptions, Acc) ->
+  [frame(Data, [fin, {opcode, Type} | BaseOptions]) | Acc].
 
 -spec frame(Data::binary(), Options::list()) -> binary().
 frame(Data, Options) ->
