@@ -371,13 +371,8 @@ spec() ->
                           assert_that(Frame#frame.mask, is(0))
                       end),
                     it("should set mask if mask option is present", fun() ->
-                    %it("should mask data if 'mask' option is present", fun() ->
                           Frame = wsock_framing:frame("assd", [mask]),
                           assert_that(Frame#frame.mask, is(1))
-                          %Data = list_to_binary("Era unha jrota"),
-                          %Frame = wsock_framing:frame(Data, [mask]),
-                          %assert_that(Frame#frame.mask, is(1)),
-                          %assert_that(Frame#frame.payload, is(mask(Data, Frame#frame.masking_key, <<>>)))
                       end)
                 end),
               describe("masking key", fun() ->
@@ -411,12 +406,6 @@ spec() ->
                 end)
           end),
         describe("payload", fun()->
-              %it("should set the FIN bit when the message is not fragmented", fun()->
-              %      Data = "Foo bar",
-
-              %      Frame = wsock_framing:frame(Data),
-              %      assert_that(Frame#frame.fin, is(1))
-              %  end),
               it("should set unmasked payload", fun() ->
                     Data = crypto:rand_bytes(100),
                     Frame = wsock_framing:frame(Data, []),
@@ -431,91 +420,7 @@ spec() ->
 
                     assert_that(Frame#frame.payload, is(MaskedData))
                 end)
-              %it("should set opcode to TEXT", fun() ->
-              %      Data = "Foo bar",
-
-              %      Frame = wsock_framing:frame(Data),
-              %      assert_that(Frame#frame.opcode, is(1))
-              %  end),
-              %describe("data length <= 125", fun() ->
-              %      it("should set data length in payload length", fun() ->
-              %            Data = "Foo bar",
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.payload_len, is(string:len(Data)))
-              %        end),
-              %      it("should set 0 in extended payload length", fun()->
-              %            Data = "Foo bar",
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len, is(0))
-              %          %)                     end),
-              %      end),
-              %      it("should set 0 in extended payload length cont.", fun()->
-              %            Data = "Foo bar",
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len_cont, is(0))
-              %        end)
-              %  end),
-              %describe("data length > 125", fun() ->
-              %      it("should set in payload_len the value 126", fun() ->
-              %            Data = get_random_string(320),
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.payload_len, is(126))
-              %          )      end),
-              %      it("should set data length in extended payload length", fun()->
-              %            Data = get_random_string(455),
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len, is(455))
-              %        end),
-              %      it("should set 0 in extended payload length cont.", fun()->
-              %            Data = "Foo bar",
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len_cont, is(0))
-              %        end)
-              %  end),
-              %describe("data length > 65536", fun() ->
-              %      it("should set in payload_len the value 127", fun() ->
-              %            Data = get_random_string(70000),
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.payload_len, is(127))
-              %        end),
-              %      it("should set 0 in extended payload length", fun()->
-              %            Data = get_random_string(68000),
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len, is(0))
-              %        end),
-              %      it("should set data length in extended payload length cont.", fun()->
-              %            Data = get_random_string(75000),
-              %            Frame = wsock_framing:frame(Data),
-              %            assert_that(Frame#frame.extended_payload_len_cont, is(75000))
-              %        end)
-              %  end),
-              %describe("masking", fun() ->
-              %      it("should set MASK", fun() ->
-              %            Data = "Foo bar",
-              %            Frame = wsock_framing:frame(Data, [mask]),
-              %            assert_that(Frame#frame.mask,is(1))
-              %        end),
-              %      it("should mask the payload", fun() ->
-              %            Data = "Foo bar",
-              %            BinData = list_to_binary(Data),
-              %            Frame = wsock_framing:frame(Data, [mask]),
-              %            MaskKey = Frame#frame.masking_key,
-              %            assert_that(Frame#frame.payload, is(mask(BinData, MaskKey, <<>>)))
-              %        end),
-              %      it("shouldn't affect payload length", fun() ->
-              %            Data = "Foo Bar",
-              %            BinData = list_to_binary(Data),
-              %            Frame = wsock_framing:frame(Data, [mask]),
-              %            assert_that(byte_size(Frame#frame.payload), is(byte_size(BinData)))
-              %        end)
-              %  end)
           end),
-        %it("should set opcode to BINARY when data is binary", fun() ->
-        %      Data = crypto:rand_bytes(64),
-
-        %      Frame = wsock_framing:frame(Data),
-        %      assert_that(Frame#frame.opcode, is(2))
-        %  end),
         describe("control frames", fun()->
               describe("close", fun() ->
                     it("should frame closes without payload", fun() ->
