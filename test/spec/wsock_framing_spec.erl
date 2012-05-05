@@ -196,6 +196,12 @@ spec() ->
               end)
     end),
   describe("from_binary", fun() ->
+        %it("masked data", fun() ->
+        %      [Frame] = wsock_framing:from_binary(Data, [mask]),
+
+        %      assert_that(Frame#frame.mask, is(1))
+        %  end),
+        it("unmasked data"),
         describe("when binary is composed from various frames", fun() ->
               it("should return a list of frame records", fun() ->
                     Text1 = "Jankle jankle",
@@ -517,14 +523,22 @@ spec() ->
 
 get_binary_frame(Fin, Rsv1, Rsv2, Rsv3, Opcode, Mask, Length, ExtendedPayloadLength, Payload) ->
   Head = <<Fin:1, Rsv1:1, Rsv2:1, Rsv3:1, Opcode:4, Mask:1, Length:7>>,
-
-  case Length of
+  TempBin =  case Length of
     126 ->
-      <<Head/binary, ExtendedPayloadLength:16, Payload/binary>>;
+      <<Head/binary, ExtendedPayloadLength:16>>;
     127 ->
-      <<Head/binary, ExtendedPayloadLength:64, Payload/binary>>;
+      <<Head/binary, ExtendedPayloadLength:64>>;
     _ ->
-      <<Head/binary, Payload/binary>>
+      <<Head/binary>>
+  end,
+
+  case Mask of
+    0 ->
+      <<TempBin/binary, Payload/binary>>;
+    1 ->
+      <<Mk:32>> = crytp:rand_bytes(4),
+      MaskedPayload =  mask(Payload, Mk, <<>>),
+      <<TempBin/binary, Mk:32, MaskedPayload/binary>>
   end.
 
 get_random_string(Length) ->
