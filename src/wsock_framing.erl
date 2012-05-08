@@ -127,39 +127,9 @@ binary_payload(Data, Frame) ->
 
       case Frame2#frame.opcode of
         _ ->
-          Frame2#frame{ payload = Payload }
+          Frame2#frame{ payload = mask(Payload, MaskingKey, <<>>) }
       end
   end.
-
-%binary_payload(Data, Frame) ->
-%  case Frame#frame.payload_len of
-%    126 ->
-%      <<_:32, Payload/binary>> = Data;
-%    127 ->
-%      <<_:80, Payload/binary>> = Data;
-%    _ ->
-%      <<_:16, Payload/binary>> = Data
-%  end,
-
-%  case Frame#frame.opcode of
-%    _ ->
-%      Frame#frame{ payload = Payload }
-%  end.
-%binary_payload(Data, Frame) ->
-%  case Frame#frame.payload_len of
-%    126 ->
-%      <<_:32, Payload/binary>> = Data;
-%    127 ->
-%      <<_:80, Payload/binary>> = Data;
-%    _ ->
-%      <<_:16, Payload/binary>> = Data
-%  end,
-
-%  case Frame#frame.opcode of
-%    _ ->
-%      Frame#frame{ payload = Payload }
-%  end.
-
 
 extended_payload_len_bit_width(PayloadLen, Max) ->
   case PayloadLen of

@@ -196,12 +196,173 @@ spec() ->
               end)
     end),
   describe("from_binary", fun() ->
-        %it("masked data", fun() ->
-        %      [Frame] = wsock_framing:from_binary(Data, [mask]),
+        before_all(fun() ->
+              spec_set(frame_builder, fun(Fin, Rsv, Opcode, Mask, Data) ->
+                    ByteSize =  byte_size(Data),
+                    DataLen = case ByteSize of
+                      X when X =< 125 -> X;
+                      X when X =< 65536  -> 126;
+                      X when X > 65536 -> 127
+                    end,
+                    BinFrame = get_binary_frame(Fin, Rsv, Rsv, Rsv, Opcode, Mask, DataLen, ByteSize, Data),
+                    wsock_framing:from_binary(BinFrame)
+                end)
+          end),
+        describe("non payload fields", fun() ->
+              describe("fin", fun() ->
+                    it("should set fin property to fin bit", fun() ->
+                          Data = crypto:rand_bytes(20),
+                          DataLen = byte_size(Data),
 
-        %      assert_that(Frame#frame.mask, is(1))
-        %  end),
-        it("unmasked data"),
+                          BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, DataLen, 0, Data),
+                          [Frame] = wsock_framing:from_binary(BinFrame),
+                          assert_that(Frame#frame.fin, is(1))
+                      end)
+                end),
+              describe("rsv", fun() ->
+                    before_all(fun() ->
+                          spec_set(generator, fun(Rsv1, Rsv2, Rsv3)->
+                                Data = crypto:rand_bytes(20),
+                                DataLen = byte_size(Data),
+
+                                BinFrame = get_binary_frame(1, Rsv1, Rsv2, Rsv3, 1, 0, DataLen, 0, Data),
+                                [Frame] = wsock_framing:from_binary(BinFrame),
+                                Frame
+                            end)
+                      end),
+                    it("should set rsv1 to rsv1 bit", fun() ->
+                          Frame = (spec_get(generator))(0, 0, 0),
+                          assert_that(Frame#frame.rsv1, is(0))
+                      end),
+                    it("should set rsv2 to rsv2 bit", fun() ->
+                          Frame = (spec_get(generator))(0, 0, 0),
+                          assert_that(Frame#frame.rsv2, is(0))
+                      end),
+                    it("should set rsv3 to rsv3 bit", fun() ->
+                          Frame = (spec_get(generator))(0, 0, 0),
+                          assert_that(Frame#frame.rsv3, is(0))
+                      end)
+                end),
+              describe("opcode", fun() ->
+                    before_all(fun() ->
+                          spec_set(validator, fun(OpCode) ->
+                                Data = crypto:rand_bytes(20),
+                                DataLen = byte_size(Data),
+                                BinFrame = get_binary_frame(1, 0, 0, 0, OpCode, 0, DataLen, 0, Data),
+                                [Frame] = wsock_framing:from_binary(BinFrame),
+
+                                assert_that(Frame#frame.opcode, is(OpCode))
+                            end)
+                      end),
+                    it("should set opcode to continuation if continuation frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_CONT)
+                      end),
+                    it("should set opcode to text if text frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_TEXT)
+                      end),
+                    it("should set opcode to binary if binary frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_BIN)
+                      end),
+                    it("should set opcode to ping if ping frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_PING)
+                      end),
+                    it("should set opcode to pong if pong frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_PONG)
+                      end),
+                    it("should set opcode to close if close frame", fun() ->
+                          (spec_get(validator))(?OP_CODE_CLOSE)
+                      end)
+                end),
+              describe("mask", fun() ->
+                    before_all(fun() ->
+                          spec_set(validator, fun(Mask) ->
+                                [Frame] = (spec_get(frame_builder))(0, 0, 1, Mask, crypto:rand_bytes(20)),
+                                assert_that(Frame#frame.mask, is(Mask))
+                            end)
+                      end),
+                    it("should set mask if masked data", fun() ->
+                          (spec_get(validator))(1)
+                      end),
+                    it("should  not set mask if unmasked data", fun() ->
+                          (spec_get(validator))(0)
+                      end)
+                end),
+              describe("payoad lenght", fun()->
+                    before_all(fun() ->
+                          spec_set(frame, fun(Size) ->
+                                (spec_get(frame_builder))(0, 0, 2, 0, crypto:rand_bytes(Size))
+                            end)
+                      end),
+                    it("set payload length of data with <= 125 bytes", fun() ->
+                          [Frame] = (spec_get(frame))(100),
+
+                          assert_that(Frame#frame.payload_len, is(100))
+                      end),
+                    it("set payload length of data with > 125 <= 65536 bytes", fun() ->
+                          [Frame] = (spec_get(frame))(200),
+
+                          assert_that(Frame#frame.payload_len, is(126)),
+                          assert_that(Frame#frame.extended_payload_len, is(200))
+                      end),
+                    it("set payload length of data with > 65536 bytes", fun() ->
+                          [Frame] = (spec_get(frame))(70000),
+
+                          assert_that(Frame#frame.payload_len, is(127)),
+                          assert_that(Frame#frame.extended_payload_len_cont, is(70000))
+                      end)
+                end),
+              describe("masking key", fun() ->
+                    before_all(fun() ->
+                          spec_set(frame, fun(Mask) ->
+                                (spec_get(frame_builder))(0, 0, 2, Mask, crypto:rand_bytes(20))
+                            end)
+                      end),
+                    it("should be undefined if data is unmasked", fun() ->
+                          [Frame] = (spec_get(frame))(0),
+
+                          assert_that(Frame#frame.masking_key, is(undefined))
+                      end),
+                    it("should be set if data is masked", fun() ->
+                          [Frame] = (spec_get(frame))(1),
+
+                          assert_that(Frame#frame.masking_key, is_not(undefined))
+                      end)
+              end)
+          end),
+        describe("payload", fun() ->
+              before_all(fun() ->
+                    spec_set(validator, fun(Mask, Size) ->
+                          Data = crypto:rand_bytes(Size),
+                          [Frame] = (spec_get(frame_builder))(0, 0, 2, Mask, Data),
+
+                          assert_that(Frame#frame.payload, is(Data))
+                      end)
+                end),
+              describe("when payload length <= 125", fun()->
+                    it("should set unmasked data", fun()->
+                          (spec_get(validator))(0 ,100)
+                      end),
+                    it("should unmask masked data", fun() ->
+                          (spec_get(validator))(1 ,100)
+                      end)
+                end),
+              describe("when payload length > 125 and <= 65536 bytes", fun()->
+                    it("should set unmasked data", fun()->
+                          (spec_get(validator))(0 , 300)
+                      end),
+                    it("should unmask masked data", fun() ->
+                          (spec_get(validator))(1 , 300)
+                      end)
+                end),
+              describe("when payload length > 65536 bytes", fun()->
+                    it("should set unmasked data", fun()->
+                          (spec_get(validator))(0 , 70000)
+                      end),
+                    it("should unmask masked data", fun() ->
+                          (spec_get(validator))(1 , 70000)
+                      end)
+                end)
+          end),
         describe("when binary is composed from various frames", fun() ->
               it("should return a list of frame records", fun() ->
                     Text1 = "Jankle jankle",
@@ -236,70 +397,6 @@ spec() ->
                     assert_that(Frame2#frame.mask, is(0)),
                     assert_that(Frame2#frame.payload_len, is(PayloadLen2)),
                     assert_that(Frame2#frame.payload, is(Payload2))
-                end)
-          end),
-        describe("when payload length <= 125", fun()->
-              it("should return a frame record", fun() ->
-                    Text = "Jankle jankle",
-                    Payload = list_to_binary(Text),
-                    PayloadLen = byte_size(Payload),
-
-                    BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, PayloadLen, 0, Payload),
-
-                    [Frame] = wsock_framing:from_binary(BinFrame),
-
-                    assert_that(Frame#frame.fin, is(1)),
-                    assert_that(Frame#frame.rsv1, is(0)),
-                    assert_that(Frame#frame.rsv2, is(0)),
-                    assert_that(Frame#frame.rsv3, is(0)),
-                    assert_that(Frame#frame.opcode, is(1)),
-                    assert_that(Frame#frame.mask, is(0)),
-                    assert_that(Frame#frame.payload_len, is(PayloadLen)),
-                    assert_that(Frame#frame.payload, is(Payload))
-                end)
-          end),
-        describe("when payload length > 125 and <= 65536", fun()->
-              it("should return a frame record", fun() ->
-                    Data = get_random_string(4096),
-                    Payload = list_to_binary(Data),
-                    PayloadLen = 126,
-                    ExtendedPayloadLen = byte_size(Payload),
-
-                    BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, PayloadLen, ExtendedPayloadLen, Payload),
-
-                    [Frame] = wsock_framing:from_binary(BinFrame),
-
-                    assert_that(Frame#frame.fin, is(1)),
-                    assert_that(Frame#frame.rsv1, is(0)),
-                    assert_that(Frame#frame.rsv2, is(0)),
-                    assert_that(Frame#frame.rsv3, is(0)),
-                    assert_that(Frame#frame.opcode, is(1)),
-                    assert_that(Frame#frame.mask, is(0)),
-                    assert_that(Frame#frame.payload_len, is(126)),
-                    assert_that(Frame#frame.extended_payload_len, is(ExtendedPayloadLen)),
-                    assert_that(Frame#frame.payload, is(Payload))
-                end)
-          end),
-        describe("when payload length > 65536", fun()->
-              it("should return a frame record", fun() ->
-                    Data = get_random_string(70000),
-                    Payload = list_to_binary(Data),
-                    PayloadLen = 127,
-                    ExtendedPayloadLenCont = byte_size(Payload),
-
-                    BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, PayloadLen, ExtendedPayloadLenCont, Payload),
-
-                    [Frame] = wsock_framing:from_binary(BinFrame),
-
-                    assert_that(Frame#frame.fin, is(1)),
-                    assert_that(Frame#frame.rsv1, is(0)),
-                    assert_that(Frame#frame.rsv2, is(0)),
-                    assert_that(Frame#frame.rsv3, is(0)),
-                    assert_that(Frame#frame.opcode, is(1)),
-                    assert_that(Frame#frame.mask, is(0)),
-                    assert_that(Frame#frame.payload_len, is(127)),
-                    assert_that(Frame#frame.extended_payload_len_cont, is(ExtendedPayloadLenCont)),
-                    assert_that(Frame#frame.payload, is(Payload))
                 end)
           end)
     end),
@@ -457,66 +554,6 @@ spec() ->
                           assert_that(binary_to_list(Reason), is("Closing this shit"))
                       end)
                 end),
-              %describe("ping", fun() ->
-              %      it("should frame pings without payload", fun() ->
-              %            Frame = wsock_framing:frame([], [fin, {opcode, ping}]),
-
-              %            assert_that(Frame#frame.fin, is(1)),
-              %            assert_that(Frame#frame.rsv1, is(0)),
-              %            assert_that(Frame#frame.rsv2, is(0)),
-              %            assert_that(Frame#frame.rsv3, is(0)),
-              %            assert_that(Frame#frame.opcode, is(9)),
-              %            assert_that(Frame#frame.mask, is(0)),
-              %            %assert_that(Frame#frame.payload, is(undefined))
-              %            assert_that(Frame#frame.payload, is(<<>>))
-              %        end),
-              %      it("should frame pings with payload", fun() ->
-              %            Frame = wsock_framing:frame("Andale", [mask, fin, {opcode, ping}]),
-
-              %            MaskedData = mask(
-              %              list_to_binary("Andale"),
-              %              Frame#frame.masking_key,
-              %              <<>>),
-
-              %            assert_that(Frame#frame.fin, is(1)),
-              %            assert_that(Frame#frame.rsv1, is(0)),
-              %            assert_that(Frame#frame.rsv2, is(0)),
-              %            assert_that(Frame#frame.rsv3, is(0)),
-              %            assert_that(Frame#frame.opcode, is(9)),
-              %            assert_that(Frame#frame.mask, is(1)),
-              %            assert_that(Frame#frame.payload, is(MaskedData))
-              %        end)
-              %  end),
-              %describe("pong", fun() ->
-              %      it("should frame pong without payload", fun() ->
-              %            Frame = wsock_framing:frame([], [fin, {opcode, pong}]),
-
-              %            assert_that(Frame#frame.fin, is(1)),
-              %            assert_that(Frame#frame.rsv1, is(0)),
-              %            assert_that(Frame#frame.rsv2, is(0)),
-              %            assert_that(Frame#frame.rsv3, is(0)),
-              %            assert_that(Frame#frame.opcode, is(10)),
-              %            assert_that(Frame#frame.mask, is(0)),
-              %            assert_that(Frame#frame.payload, is(<<>>))
-              %            %assert_that(Frame#frame.payload, is(undefined))
-              %        end),
-              %      it("should fram pongs with payload", fun() ->
-              %            Frame = wsock_framing:frame("Andale", [mask, fin, {opcode, pong}]),
-
-              %            MaskedData = mask(
-              %              list_to_binary("Andale"),
-              %              Frame#frame.masking_key,
-              %              <<>>),
-
-              %            assert_that(Frame#frame.fin, is(1)),
-              %            assert_that(Frame#frame.rsv1, is(0)),
-              %            assert_that(Frame#frame.rsv2, is(0)),
-              %            assert_that(Frame#frame.rsv3, is(0)),
-              %            assert_that(Frame#frame.opcode, is(10)),
-              %            assert_that(Frame#frame.mask, is(1)),
-              %            assert_that(Frame#frame.payload, is(MaskedData))
-              %        end)
-              %  end),
               it("should not allow payload size over 125 bytes")
           end)
     end).
@@ -536,18 +573,18 @@ get_binary_frame(Fin, Rsv1, Rsv2, Rsv3, Opcode, Mask, Length, ExtendedPayloadLen
     0 ->
       <<TempBin/binary, Payload/binary>>;
     1 ->
-      <<Mk:32>> = crytp:rand_bytes(4),
+      <<Mk:32>> = crypto:rand_bytes(4),
       MaskedPayload =  mask(Payload, Mk, <<>>),
       <<TempBin/binary, Mk:32, MaskedPayload/binary>>
   end.
 
-get_random_string(Length) ->
-  AllowedChars = "qwertyQWERTY1234567890",
-  lists:foldl(fun(_, Acc) ->
-        [lists:nth(random:uniform(length(AllowedChars)),
-            AllowedChars)]
-        ++ Acc
-    end, [], lists:seq(1, Length)).
+%get_random_string(Length) ->
+%  AllowedChars = "qwertyQWERTY1234567890",
+%  lists:foldl(fun(_, Acc) ->
+%        [lists:nth(random:uniform(length(AllowedChars)),
+%            AllowedChars)]
+%        ++ Acc
+%    end, [], lists:seq(1, Length)).
 
 %mask(Bin, MaskKey, Acc) ->
 mask(<<Data:32, Rest/bits>>, MaskKey, Acc) ->
