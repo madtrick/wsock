@@ -238,7 +238,7 @@ spec() ->
 
                     Data = <<FakeFragment1/binary, FakeFragment2/binary>>,
 
-                    [Message] = wsock_message:decode(Data),
+                    [Message] = wsock_message:decode(Data, []),
 
                     assert_that(Message#message.type, is(fragmented)),
                     assert_that(length(Message#message.frames), is(2))
@@ -259,7 +259,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary, FakeFragment4/binary>>,
 
-                    [Message] = wsock_message:decode(Data),
+                    [Message] = wsock_message:decode(Data, []),
 
                     assert_that(Message#message.type, is(binary)),
                     assert_that(Message#message.payload, is(Payload))
@@ -279,7 +279,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary>>,
 
-                    [Message] = wsock_message:decode(Data),
+                    [Message] = wsock_message:decode(Data, []),
 
                     assert_that(Message#message.type, is(text)),
                     assert_that(Message#message.payload, is(Text))
@@ -300,8 +300,8 @@ spec() ->
                     Data1 = <<FakeFragment1/binary, FakeFragment2/binary>>,
                     Data2 = <<FakeFragment3/binary>>,
 
-                    [Message1] = wsock_message:decode(Data1),
-                    [Message2] = wsock_message:decode(Data2, Message1),
+                    [Message1] = wsock_message:decode(Data1, []),
+                    [Message2] = wsock_message:decode(Data2, Message1, []),
 
                     assert_that(Message1#message.type, is(fragmented)),
                     assert_that(Message2#message.type, is(binary)),
@@ -328,7 +328,7 @@ spec() ->
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary, FakeFragment4/binary>>,
 
-                    [Message1, Message2] = wsock_message:decode(Data),
+                    [Message1, Message2] = wsock_message:decode(Data, []),
 
                     assert_that(Message1#message.type, is(binary)),
                     assert_that(Message1#message.payload, is(BinPayload1)),
@@ -357,7 +357,7 @@ spec() ->
 
                   Data = << FakeMessage1/binary, FakeMessage2/binary, FakeMessage3/binary>>,
 
-                  [Message1, Message2, Message3] = wsock_message:decode(Data),
+                  [Message1, Message2, Message3] = wsock_message:decode(Data, []),
 
                   assert_that(Message1#message.type, is(text)),
                   assert_that(Message1#message.payload, is(Text1)),
@@ -384,7 +384,7 @@ spec() ->
 
                   Data = << FakeMessage1/binary, FakeMessage2/binary, FakeMessage3/binary>>,
 
-                  [Message1, Message2, Message3] = wsock_message:decode(Data),
+                  [Message1, Message2, Message3] = wsock_message:decode(Data, []),
 
                   assert_that(Message1#message.type, is(text)),
                   assert_that(Message1#message.payload, is(Text1)),
@@ -398,7 +398,7 @@ spec() ->
                     Payload = crypto:rand_bytes(45),
                     %")
                     FakeMessage = get_binary_frame(1, 0, 0, 0, 2, 0, 45, 0, Payload),
-                    [Message] = wsock_message:decode(FakeMessage),
+                    [Message] = wsock_message:decode(FakeMessage, []),
 
                     assert_that( Message#message.payload, is(Payload))
                 end),
@@ -408,7 +408,7 @@ spec() ->
                     PayloadData = list_to_binary(Payload),
 
                     FakeMessage = get_binary_frame(1, 0, 0, 0, 1, 0, PayloadLength, 0, PayloadData),
-                    [Message] = wsock_message:decode(FakeMessage),
+                    [Message] = wsock_message:decode(FakeMessage, []),
 
                     assert_that( Message#message.payload, is(Payload))
                 end),
@@ -417,7 +417,7 @@ spec() ->
                           it("should return a message with type ping", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 9, 0, 0, 0, <<>>),
 
-                                [Message] = wsock_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage, []),
 
                                 assert_that(Message#message.type, is(ping))
                             end)
@@ -426,7 +426,7 @@ spec() ->
                           it("should return a message with type pong", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 10, 0, 0, 0, <<>>),
 
-                                [Message] = wsock_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage, []),
 
                                 assert_that(Message#message.type, is(pong))
                             end)
@@ -435,7 +435,7 @@ spec() ->
                           it("should return a message with type close", fun() ->
                                 FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, 0, 0, <<>>),
 
-                                [Message] = wsock_message:decode(FakeMessage),
+                                [Message] = wsock_message:decode(FakeMessage, []),
 
                                 assert_that(Message#message.type, is(close))
                             end),
@@ -447,7 +447,7 @@ spec() ->
                                       PayloadLen = byte_size(Payload),
                                       FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, PayloadLen, 0, Payload),
 
-                                      [Message] = wsock_message:decode(FakeMessage),
+                                      [Message] = wsock_message:decode(FakeMessage, []),
                                       {St, Re} = Message#message.payload,
 
                                       assert_that(St, is(Status)),
@@ -458,7 +458,7 @@ spec() ->
                                 it("should return the payload as a tuple {undefined, undefined}", fun() ->
                                       FakeMessage = get_binary_frame(1, 0, 0, 0, 8, 0, 0, 0, <<>>),
 
-                                      [Message] = wsock_message:decode(FakeMessage),
+                                      [Message] = wsock_message:decode(FakeMessage, []),
                                       {Status, Reason} = Message#message.payload,
 
                                       assert_that(Status, is(undefined)),
