@@ -195,6 +195,34 @@ spec() ->
           end)
     end),
   describe("decode", fun()->
+        it("should return an error if unexpected masking", fun() ->
+              Payload = crypto:rand_bytes(20),
+              Frame = get_binary_frame(0, 0, 0, 0, 2, 1, 20, 0, Payload),
+
+              Response = wsock_message:decode(Frame, []),
+
+              assert_that(Response, is({error, frames_masked}))
+          end),
+        it("should return an error if expected masking", fun() ->
+              Payload = crypto:rand_bytes(20),
+              Frame = get_binary_frame(0, 0, 0, 0, 2, 0, 20, 0, Payload),
+
+              Response = wsock_message:decode(Frame, [masked]),
+
+              assert_that(Response, is({error, frames_unmasked}))
+          end),
+        it("should decode masked messages", fun() ->
+            Payload = crypto:rand_bytes(20),
+            Fragment = get_binary_frame(0, 0, 0, 0, 2, 1, 20, 0, Payload),
+
+            [_Message] = wsock_message:decode(Fragment, [masked])
+          end),
+        it("should decode unmasked messages", fun() ->
+              Payload = crypto:rand_bytes(20),
+              Frame = get_binary_frame(0, 0, 0, 0, 2, 0, 20, 0, Payload),
+
+              [_Message] = wsock_message:decode(Frame, [])
+          end),
         describe("fragmented messages", fun() ->
               it("should complain when control messages are fragmented"),
               it("should return a fragmented message with undefined payload when message is not complete", fun() ->
@@ -444,16 +472,45 @@ spec() ->
 
 get_binary_frame(Fin, Rsv1, Rsv2, Rsv3, Opcode, Mask, Length, ExtendedPayloadLength, Payload) ->
   Head = <<Fin:1, Rsv1:1, Rsv2:1, Rsv3:1, Opcode:4, Mask:1, Length:7>>,
-
-  case Length of
+  TempBin =  case Length of
     126 ->
-      <<Head/binary, ExtendedPayloadLength:16, Payload/binary>>;
+      <<Head/binary, ExtendedPayloadLength:16>>;
     127 ->
-      <<Head/binary, ExtendedPayloadLength:64, Payload/binary>>;
+      <<Head/binary, ExtendedPayloadLength:64>>;
     _ ->
-      <<Head/binary, Payload/binary>>
+      <<Head/binary>>
+  end,
+
+  case Mask of
+    0 ->
+      <<TempBin/binary, Payload/binary>>;
+    1 ->
+      <<Mk:32>> = crypto:rand_bytes(4),
+      MaskedPayload =  mask(Payload, Mk, <<>>),
+      <<TempBin/binary, Mk:32, MaskedPayload/binary>>
   end.
 
+mask(<<Data:32, Rest/bits>>, MaskKey, Acc) ->
+  T = Data bxor MaskKey,
+  mask(Rest, MaskKey, <<Acc/binary, T:32>>);
+
+mask(<< Data:24>>, MaskKey, Acc) ->
+  <<MaskKey2:24, _/bits>> = <<MaskKey:32>>,
+  T = Data bxor MaskKey2,
+  <<Acc/binary, T:24>>;
+
+mask(<< Data:16>>, MaskKey, Acc) ->
+  <<MaskKey2:16, _/bits>> = <<MaskKey:32>>,
+  T = Data bxor MaskKey2,
+  <<Acc/binary, T:16>>;
+
+mask(<< Data:8>>, MaskKey, Acc) ->
+  <<MaskKey2:8, _/bits>> = <<MaskKey:32>>,
+  T = Data bxor MaskKey2,
+  <<Acc/binary, T:8>>;
+
+mask(<<>>, _, Acc) ->
+  Acc.
 meck_arguments(Module, Function) ->
   History = meck:history(Module),
 
