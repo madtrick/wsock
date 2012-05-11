@@ -84,34 +84,19 @@ frame(Data, Options) ->
 
 -spec decode(Data::binary(), Type :: message_type(), Message::#message{}, Masked::boolean()) -> list(#message{}).
 decode(Data, begin_message, _Message, Masked) ->
-  Frames = wsock_framing:from_binary(Data),
-  case Masked of
-    true ->
-      All = lists:all(fun(F)-> F#frame.mask == 1 end, Frames),
-      case All of
-        true ->
-          lists:reverse(process_frames(begin_message, Frames, []));
-        false ->
-          {error, frames_unmasked}
-      end;
-    false ->
-      Any = lists:any(fun(F) -> F#frame.mask == 1 end, Frames),
-      case Any of
-        true ->
-          {error, frames_masked};
-        false ->
-          lists:reverse(process_frames(begin_message, Frames, []))
-      end
-  end;
+  do_decode(Data, begin_message, [], Masked);
 
 decode(Data, continue_message, Message, Masked) ->
+  do_decode(Data, continue_message, [Message | []], Masked).
+
+do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
   case Masked of
     true ->
       All = lists:all(fun(F)-> F#frame.mask == 1 end, Frames),
       case All of
         true ->
-          lists:reverse(process_frames(continue_message, Frames, [Message | []]));
+          lists:reverse(process_frames(Type, Frames, Acc));
         false ->
           {error, frames_unmasked}
       end;
@@ -121,11 +106,9 @@ decode(Data, continue_message, Message, Masked) ->
         true ->
           {error, frames_masked};
         false ->
-          lists:reverse(process_frames(continue_message, Frames, [Message | []]))
+          lists:reverse(process_frames(Type, Frames, Acc))
       end
   end.
-  %Frames = wsock_framing:from_binary(Data),
-  %lists:reverse(process_frames(continue_message, Frames, [Message | []])).
 
 -spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}).
 process_frames(_, [], Acc) ->
