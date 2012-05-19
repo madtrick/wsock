@@ -57,7 +57,8 @@ response(ClientWebsocketKey) ->
       {"upgrade", "Websocket"},
       {"connection", "Upgrade"},
       {"sec-websocket-accept", base64:encode_to_string(crypto:sha(<<BinaryKey/binary, ?GUID>>)) }
-    ]
+    ],
+    type = response
   },
 
   {ok, #handshake{ type = response, message = HttpMessage}}.

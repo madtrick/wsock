@@ -55,6 +55,7 @@ spec() ->
                 assert_that(Response#handshake.type, is(response)),
 
                 Message = Response#handshake.message,
+                assert_that(Message#http_message.type, is(response)),
                 assert_that(wsock_http:get_start_line_value(version, Message), is("1.1")),
                 assert_that(wsock_http:get_start_line_value(status, Message), is("101")),
                 assert_that(wsock_http:get_start_line_value(reason, Message), is("Switching protocols")),
