@@ -15,7 +15,7 @@
 %% @hidden
 
 -module(wsock_framing).
--include("wsecli.hrl").
+-include("wsock.hrl").
 
 -export([to_binary/1, from_binary/1, frame/1, frame/2]).
 
@@ -39,32 +39,32 @@ to_binary(Frame) ->
   >>,
 
   Bin2 = case Frame#frame.masking_key of
-    undefined -> Bin1;
+    undefined ->
+      Bin1;
     Key ->
       <<Bin1/binary, Key:32>>
   end,
 
-  case Frame#frame.payload of
-    undefined -> Bin2;
-    Payload ->
-      <<Bin2/binary, Payload/binary>>
-  end.
-
-    %(Frame#frame.masking_key):32,
-    %(Frame#frame.payload)/binary
+  <<Bin2/binary, (Frame#frame.payload)/binary>>.
 
 -spec from_binary(Data::binary()) -> list(#frame{}).
 from_binary(Data) ->
   lists:reverse(from_binary(Data, [])).
 
-from_binary(<<Head:9, 126:7, PayloadLen:16, Payload:PayloadLen/binary, Rest/binary>>, Acc)->
-  from_binary(Rest, [decode_frame(<<Head:9, 126:7, PayloadLen:16, Payload/binary>>) | Acc]);
-
-from_binary(<<Head:9, 127:7, PayloadLen:64, Payload:PayloadLen/binary, Rest/binary>>, Acc)->
-  from_binary(Rest, [decode_frame(<<Head:9, 127:7, PayloadLen:64, Payload/binary>>) | Acc]);
-
-from_binary(<<Head:9, PayloadLen:7, Payload:PayloadLen/binary, Rest/binary>>, Acc) ->
-  from_binary(Rest, [decode_frame(<<Head:9, PayloadLen:7, Payload/binary>>) | Acc]);
+from_binary(Data = <<_:8, Mask:1, PayloadLen:7, Trailing/bits>>, Acc) ->
+  PayloadBytes=  case PayloadLen of
+    126 ->
+      <<ExtPayloadLen:16, _/binary>> = Trailing,
+      2 + ExtPayloadLen;
+    127 ->
+      <<ExtPayloadLen:64, _/binary>> = Trailing,
+      8 + ExtPayloadLen;
+    _ ->
+      PayloadLen
+  end,
+  FrameSize = 2 + (PayloadBytes ) + Mask * 4,
+  <<Frame:FrameSize/binary, Rest/binary>> = Data,
+  from_binary(Rest, [decode_frame(Frame) | Acc]);
 
 from_binary(<<>>, Acc) ->
   Acc.
@@ -98,20 +98,38 @@ binary_payload_length(Data, Frame) ->
 
 -spec binary_payload(Data::binary(), Frame::#frame{}) -> #frame{}.
 binary_payload(Data, Frame) ->
-  case Frame#frame.payload_len of
-    126 ->
-      <<_:32, Payload/binary>> = Data;
-    127 ->
-      <<_:80, Payload/binary>> = Data;
-    _ ->
-      <<_:16, Payload/binary>> = Data
-  end,
+  case Frame#frame.mask of
+    0 ->
+      case Frame#frame.payload_len of
+        126 ->
+          <<_:32, Payload/binary>> = Data;
+        127 ->
+          <<_:80, Payload/binary>> = Data;
+        _ ->
+          <<_:16, Payload/binary>> = Data
+      end,
 
-  case Frame#frame.opcode of
-    _ ->
-      Frame#frame{ payload = Payload }
+      case Frame#frame.opcode of
+        _ ->
+          Frame#frame{ payload = Payload }
+      end;
+    1 ->
+      case Frame#frame.payload_len of
+        126 ->
+          <<_:32, MaskingKey:32, Payload/binary>> = Data;
+        127 ->
+          <<_:80, MaskingKey:32, Payload/binary>> = Data;
+        _ ->
+          <<_:16, MaskingKey:32, Payload/binary>> = Data
+      end,
+
+      Frame2 = Frame#frame{masking_key = MaskingKey},
+
+      case Frame2#frame.opcode of
+        _ ->
+          Frame2#frame{ payload = mask(Payload, MaskingKey, <<>>) }
+      end
   end.
-
 
 extended_payload_len_bit_width(PayloadLen, Max) ->
   case PayloadLen of
@@ -136,13 +154,22 @@ frame({CloseCode, Reason}, Options) ->
   Data = <<CloseCode:16, BinReason/binary>>,
   frame(Data, Options);
 
+
 frame(Data, Options) ->
-  Frame = #frame{},
+  Frame = #frame{ payload = Data},
   Frame2 = length(Frame, Data),
-  Frame3 = mask(Frame2, Data),
-  apply_options(Frame3, Options).
+  apply_options(Frame2, Options).
 
 -spec apply_options(Frame::#frame{}, Options::list()) -> #frame{}.
+apply_options(Frame, [mask | Tail]) ->
+  <<MaskKey:32>> = crypto:rand_bytes(4),
+  T = Frame#frame{
+    mask = 1,
+    masking_key = MaskKey,
+    payload = mask(Frame#frame.payload, MaskKey, <<>>)
+  },
+  apply_options(T, Tail);
+
 apply_options(Frame, [fin | Tail]) ->
   T = Frame#frame{fin = 1},
   apply_options(T, Tail);
@@ -176,7 +203,6 @@ apply_options(Frame, []) ->
 
 -spec length(Frame::#frame{}, Data :: binary()) -> #frame{}.
 length(Frame, Data) ->
-  %Len = string:len(Data),
   Len = byte_size(Data),
   if
     Len =< 125 ->
@@ -198,20 +224,6 @@ length(Frame, Data) ->
         extended_payload_len_cont = Len
       }
   end.
-
--spec mask(Frame::#frame{}, Data::binary()) -> #frame{}.
-mask(Frame, <<>>) ->
-  Frame#frame{mask = 0};
-
-mask(Frame, Data) ->
-  <<MaskKey:32>> = crypto:rand_bytes(4),
-  %BinData = list_to_binary(Data),
-
-  Frame#frame{
-    mask = 1,
-    masking_key = MaskKey,
-    payload = mask(Data, MaskKey, <<>>)
-  }.
 
 
 %

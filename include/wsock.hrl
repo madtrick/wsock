@@ -1,11 +1,12 @@
 -record(http_message,{
     type :: response | request,
     start_line :: list({atom(), string()}),
-    headers :: list({atom(), string()})
+    headers :: list({string(), string()})
   }).
 
 -record(handshake, {
     version      :: integer(),
+    type :: handle_open | handle_response | open | response,
     message :: #http_message{}
   }).
 
@@ -17,7 +18,7 @@
     rsv2 = 0 :: bit(),
     rsv3 = 0 :: bit(),
     opcode :: byte(),
-    mask :: bit(),
+    mask = 0 :: bit(),
     payload_len :: byte(),
     extended_payload_len :: byte(),
     extended_payload_len_cont :: integer(),
@@ -27,5 +28,5 @@
 -record(message, {
     frames = [] :: list(#frame{}),
     payload :: string() | binary(), % FALSE!!! what about control message with code + message
-    type :: {text, binary, control, fragmented}
+    type :: text | binary | close | ping | pong | fragmented
   }).

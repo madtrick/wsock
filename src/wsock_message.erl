@@ -17,64 +17,98 @@
 -module(wsock_message).
 -include("wsock.hrl").
 
--export([encode/2, decode/1, decode/2]).
+-export([encode/2, decode/2, decode/3]).
+%-export([encode/3]).
 
 -define(FRAGMENT_SIZE, 4096).
 -type message_type() :: begin_message | continue_message.
 
--spec encode(Data::string() | binary(), Type::atom()) -> binary().
-encode(Data, Type) when is_list(Data)->
-  encode(list_to_binary(Data), Type);
+-spec encode(Data::string() | binary(), Options::list()) -> binary().
+encode(Data, Options) when is_list(Data) ->
+  encode(list_to_binary(Data), Options);
 
-encode(Data, Type)->
-  lists:reverse(encode(Data, Type, [])).
-
--spec decode(Data::binary()) -> list(#message{}).
-decode(Data) ->
-  decode(Data, begin_message, #message{}).
-
--spec decode(Data::binary(), Message::#message{}) -> list(#message{}).
-decode(Data, Message) ->
-  decode(Data, continue_message, Message).
+encode(Data, Options) ->
+  {Type, BaseOptions} = extract_type(Options),
+  lists:reverse(encode(Data, Type, BaseOptions, [])).
 
 
-%
+-spec decode(Data::binary(), Options::list()) -> list(#message{}).
+decode(Data, Options) ->
+  Masked = proplists:get_value(masked, Options, false),
+  decode(Data, begin_message, #message{}, Masked).
+
+-spec decode(Data::binary(), Message::#message{}, Options::list()) -> list(#message{}).
+decode(Data, Message, Options) ->
+  Masked = proplists:get_value(masked, Options, false),
+  decode(Data, continue_message, Message, Masked).
+
+%===================
 % Internal
-%
--spec encode(Data::binary(), Type :: atom(), Acc ::list()) -> list().
-encode(Data, Type, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
-  [frame(Data, [fin, {opcode, Type}])];
-  %Frame = wsock_framing:frame(Data, [fin, {opcode, Type}]),
-  %wsock_framing:to_binary(Frame);
+%===================
 
-encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, Acc) ->
-  [frame(Data, [fin, {opcode, Type}]) | Acc];
+extract_type(Options) ->
+  Types = [text, binary, close, ping, pong],
+  Type = lists:filter(fun(E) ->
+        true == proplists:get_value(E, Options)
+    end, Types),
 
-encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, []) ->
-  encode(Rest, continuation, [frame(Data, [{opcode, Type}]) | []]);
+  case Type of
+    [] -> error;
+    [T] ->
+      OptionsWithoutType = proplists:delete(T, Options),
+      {T, OptionsWithoutType}
+  end.
 
-encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, Acc) ->
-  encode(Rest, Type, [frame(Data, [{opcode, Type}]) | Acc]);
+encode(Data, Type, BaseOptions, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
+  [frame(Data, [ fin, {opcode, Type} | BaseOptions])];
 
-encode(<<>>, _Type, Acc) ->
+encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, BaseOptions, Acc) ->
+  [frame(Data, [fin, {opcode, Type} | BaseOptions]) | Acc];
+
+encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, BaseOptions, []) ->
+  encode(Rest, continuation, BaseOptions, [frame(Data, [{opcode, Type} | BaseOptions]) | []]);
+
+encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, BaseOptions, Acc) ->
+  encode(Rest, Type, BaseOptions, [frame(Data, [{opcode, Type} | BaseOptions]) | Acc]);
+
+encode(<<>>, _Type, _Options, Acc) ->
   Acc;
 
-encode(<<Data/binary>>, Type, Acc) ->
-  [frame(Data, [fin, {opcode, Type}]) | Acc].
+encode(<<Data/binary>>, Type, BaseOptions, Acc) ->
+  [frame(Data, [fin, {opcode, Type} | BaseOptions]) | Acc].
 
 -spec frame(Data::binary(), Options::list()) -> binary().
 frame(Data, Options) ->
   Frame = wsock_framing:frame(Data, Options),
   wsock_framing:to_binary(Frame).
 
--spec decode(Data::binary(), Type :: message_type(), Message::#message{}) -> list(#message{}).
-decode(Data, begin_message, _Message) ->
-  Frames = wsock_framing:from_binary(Data),
-  lists:reverse(process_frames(begin_message, Frames, []));
+-spec decode(Data::binary(), Type :: message_type(), Message::#message{}, Masked::boolean()) -> list(#message{}).
+decode(Data, begin_message, _Message, Masked) ->
+  do_decode(Data, begin_message, [], Masked);
 
-decode(Data, continue_message, Message) ->
+decode(Data, continue_message, Message, Masked) ->
+  do_decode(Data, continue_message, [Message | []], Masked).
+
+do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
-  lists:reverse(process_frames(continue_message, Frames, [Message | []])).
+  case Masked of
+    true ->
+      All = lists:all(fun(F)-> F#frame.mask == 1 end, Frames),
+      case All of
+        true ->
+          lists:reverse(process_frames(Type, Frames, Acc));
+        false ->
+          {error, frames_unmasked}
+      end;
+    false ->
+      Any = lists:any(fun(F) -> F#frame.mask == 1 end, Frames),
+      case Any of
+        true ->
+          {error, frames_masked};
+        false ->
+          lists:reverse(process_frames(Type, Frames, Acc))
+      end
+  end.
 
 -spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}).
 process_frames(_, [], Acc) ->

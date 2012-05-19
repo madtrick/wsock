@@ -15,50 +15,46 @@
 %% @hidden
 
 -module(wsock_http).
--include("wsecli.hrl").
+-include("wsock.hrl").
 
--export([build/3, to_request/1, from_response/1, get_start_line_value/2, get_header_value/2]).
+-export([build/3, get_start_line_value/2, get_header_value/2]).
+-export([decode/2, encode/1]).
 
 -define(CTRL, "\r\n").
+
+-spec decode(Data::binary(), Type::request | response) -> {ok,#http_message{}} | {error, malformed_request}.
+decode(Data, Type) ->
+  [StartLine | Headers] = split(Data),
+  StartLineProcessed = process_startline(StartLine, Type),
+  HeadersProcessed = process_headers(Headers),
+
+  case {StartLineProcessed, HeadersProcessed} of
+    {{error, _}, _} ->
+      {error, malformed_request};
+    {_, {error, _}} ->
+      {error, malformed_request};
+    {{ok, StartLineList}, {ok, HeaderList}} ->
+          {ok, wsock_http:build(Type, StartLineList, HeaderList)}
+  end.
+
 
 -spec build(Type::atom(), StartLine::list({atom(), string()}), Headers::list({string(), string()})) -> list(string()).
 build(Type, StartLine, Headers) ->
   #http_message{type = Type, start_line = StartLine, headers = Headers}.
 
--spec to_request(Message::#http_message{}) -> list(string()).
-to_request(Message) ->
-  build_request_line(
-    Message#http_message.start_line,
-    build_headers(Message#http_message.headers, ["\r\n"])
-  ).
+-spec encode(Message::#http_message{}) -> list(string()).
+encode(Message) ->
+  Startline = Message#http_message.start_line,
+  Headers = Message#http_message.headers,
+  encode(Startline, Headers, Message#http_message.type).
 
--spec build_headers(list({HeaderName::string(), HeaderValue::string()}), list(string())) -> list(string()).
-build_headers(Headers, Acc) ->
-  lists:foldr(fun({Key, Value}, AccIn) ->
-        [ Key ++ ": " ++ Value ++ "\r\n" | AccIn]
-    end, Acc, Headers).
+-spec encode(Startline::list({atom(), string()}), Headers::list({string(), string()}), Type:: request | response) -> list(string()).
+encode(Startline, Headers, request) ->
+  encode_message("{{method}} {{resource}} HTTP/{{version}}", Startline, Headers);
 
--spec build_request_line(list({Name::atom(), Value::string()}), list(string())) -> list(string()).
-build_request_line(RequestLine, Acc) ->
-  Method   = proplists:get_value(method, RequestLine),
-  Version  = proplists:get_value(version, RequestLine),
-  Resource = proplists:get_value(resource, RequestLine),
+encode(Startline, Headers, response) ->
+  encode_message("HTTP/{{version}} {{status}} {{reason}}", Startline, Headers).
 
-  [Method ++ " " ++ Resource ++ " " ++ "HTTP/" ++ Version ++ "\r\n" | Acc].
-
--spec from_response(Data::binary()) -> #http_message{}.
-from_response(Data) ->
-  [StatusLine | Headers] = binary:split(Data, <<?CTRL>>, [trim, global]),
-  {match, [_, Version, Status, Reason]} = re:run(StatusLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [{capture, all, list}]),
-
-  StatusLineList = [{version, Version}, {status, Status}, {reason, Reason}],
-
-  HeadersList = lists:foldr(fun(Element, Acc) ->
-        {match, [_Match, HeaderName, HeaderValue]} = re:run(Element, "(\.+):\s+(\.+)", [{capture, all, list}]),
-        [{string:strip(HeaderName), HeaderValue} | Acc]
-    end, [], Headers),
-
-  wsock_http:build(response, StatusLineList, HeadersList).
 
 -spec get_start_line_value(Key::atom(), Message::#http_message{}) -> string().
 get_start_line_value(Key, Message) ->
@@ -70,7 +66,7 @@ get_header_value(Key, Message) ->
   get_header_value_case_insensitive(LowerCasedKey, Message#http_message.headers).
 
 -spec get_header_value_case_insensitive(Key::string(), list()) ->  undefined;
-                                        (Key::string(), list()) -> string().
+(Key::string(), list()) -> string().
 get_header_value_case_insensitive(_, []) ->
   undefined;
 
@@ -82,3 +78,71 @@ get_header_value_case_insensitive(Key, [{Name, Value} | Tail]) ->
     false ->
       get_header_value_case_insensitive(Key, Tail)
   end.
+
+%=============
+% Helpers
+%=============
+-spec split(Data::binary()) -> list(binary()).
+split(Data)->
+  Fragments =   lists:map(fun(Element) ->
+        re:replace(Element, <<"^\n*\s*|\n*\s*$">>, <<"">>, [global, {return, binary}])
+    end, binary:split(Data, <<?CTRL>>, [trim, global])),
+
+  lists:filter(fun(Element) ->
+        <<>> =/= Element
+    end, Fragments).
+
+-spec process_startline(StartLine::binary(), Type:: request | response) -> list() | {error, term()}.
+process_startline(StartLine, request) ->
+  process_startline(StartLine, "(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", [method, resource, version]);
+
+process_startline(StartLine, response) ->
+  process_startline(StartLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [version, status, reason]).
+
+-spec process_startline(StartLine::binary(), Regexp::list(), Keys::list(atom())) -> term().
+process_startline(StartLine, Regexp, Keys) ->
+  case regexp_run(Regexp, StartLine) of
+    {match, [_ | Matchs]} ->
+      {ok , lists:zip(Keys, Matchs)};
+    nomatch -> {error, nomatch}
+  end.
+
+-spec regexp_run(Regexp::list(), String::binary()) -> {match, list()}.
+regexp_run(Regexp, String) ->
+  re:run(String, Regexp, [{capture, all, list}, caseless]).
+
+
+-spec process_headers(Headers::list(binary())) -> list({list(), list()}).
+process_headers(Headers) ->
+  process_headers(Headers, []).
+
+-spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
+process_headers([Header | Tail], Acc) ->
+  case regexp_run("([!-9;-~]+)\s*:\s*(.+)", Header) of
+    {match, [_Match, HeaderName, HeaderValue]} -> 
+      process_headers(Tail, [{string:strip(HeaderName), HeaderValue} | Acc]);
+    nomatch ->
+      {error, nomatch}
+  end;
+
+process_headers([], Acc) ->
+  {ok, Acc}.
+
+encode_message(StartlineExpr, StartlineFields, Headers) ->
+  SL = build_start_line(StartlineExpr, StartlineFields),
+  H= build_headers(Headers),
+
+  lists:foldr(fun(El, Acc) ->
+        [El++"\r\n" | Acc]
+    end, ["\r\n"], [SL | H]).
+
+build_start_line(StartlineExpr, StartlineFields) ->
+  lists:foldr(fun({Key, Value}, Acc) ->
+        re:replace(Acc, "{{" ++ atom_to_list(Key) ++ "}}", Value, [{return, list}])
+    end, StartlineExpr, StartlineFields).
+
+-spec build_headers(list({HeaderName::string(), HeaderValue::string()})) -> list(string()).
+build_headers(Headers) ->
+  lists:map(fun({Key, Value}) ->
+        Key ++ ": " ++ Value
+    end, Headers).
