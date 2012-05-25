@@ -38,7 +38,11 @@ spec() ->
               [_Data, Options] = meck_arguments(wsock_framing, frame),
               assert_that(proplists:get_value(mask, Options), is(true))
           end),
-        it("should not mask data if 'mask' option is not preset"),
+        it("should not mask data if 'mask' option is not present", fun() ->
+              wsock_message:encode("frotisfrotis", [text]),
+              [_Data, Options] = meck_arguments(wsock_framing, frame),
+              assert_that(proplists:get_value(mask, Options), is(undefined))
+          end),
         it("should set opcode to 'text' if type is text", fun() ->
               wsock_message:encode("asadsd", [text]),
               [_Data, Options] = meck_arguments(wsock_framing, frame),
