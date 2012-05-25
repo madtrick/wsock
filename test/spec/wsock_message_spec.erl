@@ -87,7 +87,6 @@ spec() ->
                     assert_that(meck:called(wsock_framing, frame, '_'), is(true)),
                     assert_that(length(Frames), is(2))
                 end),
-              it("should set correctly payload len"),
               it("should set a payload of 4096 bytes or less on each fragment", fun() ->
                     Data = crypto:rand_bytes(?FRAGMENT_SIZE*3),
                     Frames = wsock_message:encode(Data, [binary]),
