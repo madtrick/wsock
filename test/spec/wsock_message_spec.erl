@@ -29,7 +29,10 @@ spec() ->
               meck:unload(wsock_framing)
           end),
 
-        it("should return an error if no datatype option is given"),
+        it("should return an error if no datatype option is given", fun() ->
+              Return = wsock_message:encode("motosicleta man", []),
+              assert_that(Return, is({error, missing_datatype}))
+          end),
         it("should mask data if 'mask' option is present", fun() ->
               wsock_message:encode("asdasda", [text ,mask]),
               [_Data, Options] = meck_arguments(wsock_framing, frame),

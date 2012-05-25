@@ -28,8 +28,12 @@ encode(Data, Options) when is_list(Data) ->
   encode(list_to_binary(Data), Options);
 
 encode(Data, Options) ->
-  {Type, BaseOptions} = extract_type(Options),
-  lists:reverse(encode(Data, Type, BaseOptions, [])).
+  case extract_type(Options) of
+    error ->
+      {error, missing_datatype};
+    {Type, BaseOptions} ->
+      lists:reverse(encode(Data, Type, BaseOptions, []))
+  end.
 
 
 -spec decode(Data::binary(), Options::list()) -> list(#message{}).
