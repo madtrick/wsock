@@ -230,7 +230,18 @@ spec() ->
               [_Message] = wsock_message:decode(Frame, [])
           end),
         describe("fragmented messages", fun() ->
-              it("should complain when control messages are fragmented"),
+              %describe("when they are control messages", )
+              it("should complain when control messages are fragmented", fun() ->
+                    Data = crypto:rand_bytes(10),
+                    Frame1 = get_binary_frame(0, 0, 0, 0, 8, 0, 10, 0, Data),
+                    Frame2 = get_binary_frame(1, 0, 0, 0, 0, 0, 10, 0, Data),
+
+                    Message = <<Frame1/binary, Frame2/binary>>,
+
+                    Return = wsock_message:decode(Message, []),
+
+                    assert_that(Return, is({error, fragmented_control_message}))
+                end),
               it("should return a fragmented message with undefined payload when message is not complete", fun() ->
                     Payload = crypto:rand_bytes(20),
                     <<
