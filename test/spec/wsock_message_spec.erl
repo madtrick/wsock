@@ -29,13 +29,20 @@ spec() ->
               meck:unload(wsock_framing)
           end),
 
-        it("should return an error if no datatype option is given"),
+        it("should return an error if no datatype option is given", fun() ->
+              Return = wsock_message:encode("motosicleta man", []),
+              assert_that(Return, is({error, missing_datatype}))
+          end),
         it("should mask data if 'mask' option is present", fun() ->
               wsock_message:encode("asdasda", [text ,mask]),
               [_Data, Options] = meck_arguments(wsock_framing, frame),
               assert_that(proplists:get_value(mask, Options), is(true))
           end),
-        it("should not mask data if 'mask' option is not preset"),
+        it("should not mask data if 'mask' option is not present", fun() ->
+              wsock_message:encode("frotisfrotis", [text]),
+              [_Data, Options] = meck_arguments(wsock_framing, frame),
+              assert_that(proplists:get_value(mask, Options), is(undefined))
+          end),
         it("should set opcode to 'text' if type is text", fun() ->
               wsock_message:encode("asadsd", [text]),
               [_Data, Options] = meck_arguments(wsock_framing, frame),
@@ -80,7 +87,6 @@ spec() ->
                     assert_that(meck:called(wsock_framing, frame, '_'), is(true)),
                     assert_that(length(Frames), is(2))
                 end),
-              it("should set correctly payload len"),
               it("should set a payload of 4096 bytes or less on each fragment", fun() ->
                     Data = crypto:rand_bytes(?FRAGMENT_SIZE*3),
                     Frames = wsock_message:encode(Data, [binary]),
@@ -224,7 +230,18 @@ spec() ->
               [_Message] = wsock_message:decode(Frame, [])
           end),
         describe("fragmented messages", fun() ->
-              it("should complain when control messages are fragmented"),
+              %describe("when they are control messages", )
+              it("should complain when control messages are fragmented", fun() ->
+                    Data = crypto:rand_bytes(10),
+                    Frame1 = get_binary_frame(0, 0, 0, 0, 8, 0, 10, 0, Data),
+                    Frame2 = get_binary_frame(1, 0, 0, 0, 0, 0, 10, 0, Data),
+
+                    Message = <<Frame1/binary, Frame2/binary>>,
+
+                    Return = wsock_message:decode(Message, []),
+
+                    assert_that(Return, is({error, fragmented_control_message}))
+                end),
               it("should return a fragmented message with undefined payload when message is not complete", fun() ->
                     Payload = crypto:rand_bytes(20),
                     <<

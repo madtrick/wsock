@@ -28,8 +28,12 @@ encode(Data, Options) when is_list(Data) ->
   encode(list_to_binary(Data), Options);
 
 encode(Data, Options) ->
-  {Type, BaseOptions} = extract_type(Options),
-  lists:reverse(encode(Data, Type, BaseOptions, [])).
+  case extract_type(Options) of
+    error ->
+      {error, missing_datatype};
+    {Type, BaseOptions} ->
+      lists:reverse(encode(Data, Type, BaseOptions, []))
+  end.
 
 
 -spec decode(Data::binary(), Options::list()) -> list(#message{}).
@@ -96,7 +100,13 @@ do_decode(Data, Type, Acc, Masked) ->
       All = lists:all(fun(F)-> F#frame.mask == 1 end, Frames),
       case All of
         true ->
-          lists:reverse(process_frames(Type, Frames, Acc));
+          case process_frames(Type, Frames, Acc) of
+            {error, Reason} ->
+              {error, Reason};
+            Messages ->
+              lists:reverse(Messages)
+          end;
+          %lists:reverse(process_frames(Type, Frames, Acc));
         false ->
           {error, frames_unmasked}
       end;
@@ -106,7 +116,13 @@ do_decode(Data, Type, Acc, Masked) ->
         true ->
           {error, frames_masked};
         false ->
-          lists:reverse(process_frames(Type, Frames, Acc))
+          case process_frames(Type, Frames, Acc) of
+            {error, Reason} ->
+              {error, Reason};
+            Messages ->
+              lists:reverse(Messages)
+          end
+          %lists:reverse(process_frames(Type, Frames, Acc))
       end
   end.
 
@@ -121,6 +137,8 @@ process_frames(continue_message, Frames, [FramgmentedMessage | Acc]) ->
 
 wtf([Frame | Frames], Type, XMessage, Acc) ->
   case process_frame(Frame, Type, XMessage) of
+    {error, Reason} ->
+      {error, Reason};
     {fragmented, Message} ->
       process_frames(continue_message, Frames, [Message#message{type = fragmented} | Acc]);
     {completed, Message} ->
@@ -130,6 +148,8 @@ wtf([Frame | Frames], Type, XMessage, Acc) ->
 -spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: #message{})-> {fragmented | completed, #message{}}.
 process_frame(Frame, begin_message, Message) ->
   case contextualize_frame(Frame) of
+    control_fragment ->
+      {error, fragmented_control_message};
     open_close ->
       BuiltMessage = build_message(Message, [Frame]),
       {completed, BuiltMessage};
@@ -140,6 +160,8 @@ process_frame(Frame, begin_message, Message) ->
 
 process_frame(Frame, continue_message, Message) ->
   case contextualize_frame(Frame) of
+    control_fragment ->
+      {error, fragmented_control_message};
     continue ->
       Frames = Message#message.frames,
       {fragmented, Message#message{frames = [Frame | Frames]}};
@@ -153,6 +175,7 @@ contextualize_frame(Frame) ->
   case {Frame#frame.fin, Frame#frame.opcode} of
     {1, 0} -> continue_close;
     {0, 0} -> continue;
+    {0, Opcode} when Opcode == 8; Opcode == 9; Opcode == 10 -> control_fragment;
     {1, _} -> open_close;
     {0, _} -> open_continue
   end.
