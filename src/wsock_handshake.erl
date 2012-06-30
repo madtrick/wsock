@@ -26,7 +26,7 @@
 -define(INVALID_CLIENT_OPEN, invalid_handshake_opening).
 -define(INVALID_SERVER_RESPONSE, invalid_server_response).
 
--spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, atom()}.
+-spec handle_open(Message::#http_message{}) -> {ok, #handshake{}} | {error, ?INVALID_CLIENT_OPEN}.
 handle_open(Message) ->
   case validate_handshake_open(Message) of
     true ->
@@ -35,7 +35,7 @@ handle_open(Message) ->
       {error, ?INVALID_CLIENT_OPEN}
   end.
 
--spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> boolean().
+-spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> {ok, ?INVALID_SERVER_RESPONSE} | {ok, #handshake{}}.
 handle_response(Response, Handshake) ->
   case validate_handshake_response(Response, Handshake) of
     true ->
@@ -80,7 +80,7 @@ open(Resource, Host, Port) ->
   ],
 
   Message = wsock_http:build(request, RequestLine, Headers),
-  #handshake{ version = ?VERSION, type = open, message = Message}.
+  {ok, #handshake{ version = ?VERSION, type = open, message = Message}}.
 
 
 %=======================

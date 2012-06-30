@@ -38,7 +38,7 @@ decode(Data, Type) ->
   end.
 
 
--spec build(Type::atom(), StartLine::list({atom(), string()}), Headers::list({string(), string()})) -> list(string()).
+-spec build(Type::atom(), StartLine::list({atom(), string()}), Headers::list({string(), string()})) -> #http_message{}.
 build(Type, StartLine, Headers) ->
   #http_message{type = Type, start_line = StartLine, headers = Headers}.
 
@@ -65,8 +65,7 @@ get_header_value(Key, Message) ->
   LowerCasedKey = string:to_lower(Key),
   get_header_value_case_insensitive(LowerCasedKey, Message#http_message.headers).
 
--spec get_header_value_case_insensitive(Key::string(), list()) ->  undefined;
-(Key::string(), list()) -> string().
+-spec get_header_value_case_insensitive(Key::string(), list()) ->  undefined | string().
 get_header_value_case_insensitive(_, []) ->
   undefined;
 
@@ -92,14 +91,14 @@ split(Data)->
         <<>> =/= Element
     end, Fragments).
 
--spec process_startline(StartLine::binary(), Type:: request | response) -> list() | {error, term()}.
+-spec process_startline(StartLine::binary(), Type:: request | response) -> {ok, list({atom(), string()})} | {error, nomatch}.
 process_startline(StartLine, request) ->
   process_startline(StartLine, "(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", [method, resource, version]);
 
 process_startline(StartLine, response) ->
   process_startline(StartLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [version, status, reason]).
 
--spec process_startline(StartLine::binary(), Regexp::list(), Keys::list(atom())) -> term().
+-spec process_startline(StartLine::binary(), Regexp::list(), Keys::list(atom())) -> {ok, list({atom(), string()})} | {error, nomatch}.
 process_startline(StartLine, Regexp, Keys) ->
   case regexp_run(Regexp, StartLine) of
     {match, [_ | Matchs]} ->
@@ -107,16 +106,16 @@ process_startline(StartLine, Regexp, Keys) ->
     nomatch -> {error, nomatch}
   end.
 
--spec regexp_run(Regexp::list(), String::binary()) -> {match, list()}.
+-spec regexp_run(Regexp::list(), String::binary()) -> {match, list()} | nomatch.
 regexp_run(Regexp, String) ->
   re:run(String, Regexp, [{capture, all, list}, caseless]).
 
 
--spec process_headers(Headers::list(binary())) -> list({list(), list()}).
+-spec process_headers(Headers::list(binary())) -> {ok, list({string(), string()})} | {error, nomatch}.
 process_headers(Headers) ->
   process_headers(Headers, []).
 
--spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> list({list(), list()}) | {error, term()}.
+-spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> {ok, list({string(), string()})} | {error, nomatch}.
 process_headers([Header | Tail], Acc) ->
   case regexp_run("([!-9;-~]+)\s*:\s*(.+)", Header) of
     {match, [_Match, HeaderName, HeaderValue]} -> 

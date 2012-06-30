@@ -23,7 +23,7 @@
 -define(FRAGMENT_SIZE, 4096).
 -type message_type() :: begin_message | continue_message.
 
--spec encode(Data::string() | binary(), Options::list()) -> binary().
+-spec encode(Data::string() | binary(), Options::list()) -> [binary()] | {error, missing_datatype}.
 encode(Data, Options) when is_list(Data) ->
   encode(list_to_binary(Data), Options);
 
@@ -86,13 +86,14 @@ frame(Data, Options) ->
   Frame = wsock_framing:frame(Data, Options),
   wsock_framing:to_binary(Frame).
 
--spec decode(Data::binary(), Type :: message_type(), Message::#message{}, Masked::boolean()) -> list(#message{}).
+-spec decode(Data::binary(), Type :: message_type(), Message::#message{}, Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
 decode(Data, begin_message, _Message, Masked) ->
   do_decode(Data, begin_message, [], Masked);
 
 decode(Data, continue_message, Message, Masked) ->
   do_decode(Data, continue_message, [Message | []], Masked).
 
+-spec do_decode(Data::binary(), Type:: message_type(), Acc::list(), Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
 do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
   case Masked of
@@ -126,7 +127,7 @@ do_decode(Data, Type, Acc, Masked) ->
       end
   end.
 
--spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}).
+-spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
 process_frames(_, [], Acc) ->
   Acc;
 process_frames(begin_message, Frames, Acc) ->
@@ -145,7 +146,7 @@ wtf([Frame | Frames], Type, XMessage, Acc) ->
       process_frames(begin_message, Frames, [Message | Acc])
   end.
 
--spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: #message{})-> {fragmented | completed, #message{}}.
+-spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: #message{})-> {fragmented | completed, #message{}} | {error, fragmented_control_message}.
 process_frame(Frame, begin_message, Message) ->
   case contextualize_frame(Frame) of
     control_fragment ->

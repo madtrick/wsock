@@ -72,7 +72,7 @@ spec() ->
               Host     = "localhost",
               Port      = 8080,
 
-              HandShake = wsock_handshake:open(Resource, Host, Port),
+              {ok, HandShake} = wsock_handshake:open(Resource, Host, Port),
               assert_that(HandShake#handshake.version, is(13)),
               assert_that(HandShake#handshake.type, is(open)),
 
@@ -94,7 +94,7 @@ spec() ->
               Host = "localhost",
               Port = 8080,
 
-              OpenHandShake = wsock_handshake:open(Resource, Host, Port),
+              {ok, OpenHandShake} = wsock_handshake:open(Resource, Host, Port),
               Key = wsock_http:get_header_value("sec-websocket-key", OpenHandShake#handshake.message),
 
               BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n

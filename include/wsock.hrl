@@ -22,7 +22,7 @@
     payload_len :: byte(),
     extended_payload_len :: byte(),
     extended_payload_len_cont :: integer(),
-    masking_key :: binary(),
+    masking_key :: integer(),
     payload :: binary()}).
 
 -record(message, {
