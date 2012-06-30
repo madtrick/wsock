@@ -170,7 +170,7 @@ process_frame(Frame, continue_message, Message) ->
       {completed, BuiltMessage}
   end.
 
--spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close.
+-spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close | control_fragment.
 contextualize_frame(Frame) ->
   case {Frame#frame.fin, Frame#frame.opcode} of
     {1, 0} -> continue_close;
