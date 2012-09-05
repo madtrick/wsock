@@ -11,11 +11,11 @@ task :shell do
 end
 
 task :features do
-  sh "rebar compile run-features path=test/acceptance skip_deps=true"
+  sh "rebar -C rebar.tests.config compile run-features path=test/acceptance skip_deps=true"
 end
 
 task :spec do
-  sh "rebar compile && ERL_LIBS='deps/' ./espec test/spec/"
+  sh "rebar -C rebar.tests.config compile && ERL_LIBS='deps/' ./espec test/spec/"
 end
 
 task :default => :build
