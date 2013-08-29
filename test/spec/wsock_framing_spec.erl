@@ -524,6 +524,17 @@ spec() ->
                     assert_that(Frame#frame.payload, is(MaskedData))
                 end)
           end),
+        describe("when input data is fragmented", fun() ->
+              it("should return a fragmented frame", fun() ->
+                    % We set a payload length of 10 bytes but set only 5
+                    % to mock that this is a fragmented frame
+                    BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, 10, 0, crypto:rand_bytes(5)),
+                    [Frame] = wsock_framing:from_binary(BinFrame),
+
+                    assert_that(Frame#frame.fragmented, is(true)),
+                    assert_that(Frame#frame.raw, is(BinFrame))
+                end)
+          end),
         describe("control frames", fun()->
               describe("close", fun() ->
                     it("should frame closes without payload", fun() ->

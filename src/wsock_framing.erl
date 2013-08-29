@@ -63,11 +63,20 @@ from_binary(Data = <<_:8, Mask:1, PayloadLen:7, Trailing/bits>>, Acc) ->
       PayloadLen
   end,
   FrameSize = 2 + (PayloadBytes ) + Mask * 4,
-  <<Frame:FrameSize/binary, Rest/binary>> = Data,
-  from_binary(Rest, [decode_frame(Frame) | Acc]);
+  case FrameSize > byte_size(Data) of
+    true ->
+      [ decode_fragmented_frame(Data) | Acc];
+    false ->
+      <<Frame:FrameSize/binary, Rest/binary>> = Data,
+      from_binary(Rest, [decode_frame(Frame) | Acc])
+  end;
 
 from_binary(<<>>, Acc) ->
   Acc.
+
+decode_fragmented_frame(Data) ->
+  #frame{ fragmented = true, raw = Data }.
+
 
 decode_frame(Data = <<Fin:1, Rsv1:1, Rsv2:1, Rsv3:1, Opcode:4, Mask:1, _/bits>> ) ->
   % TODO: ensure that Mask is not set

@@ -23,7 +23,10 @@
     extended_payload_len :: byte(),
     extended_payload_len_cont :: integer(),
     masking_key :: integer(),
-    payload :: binary()}).
+    payload :: binary(),
+    fragmented :: boolean(),
+    raw :: byte() % raw data for a fragmented frame
+  }).
 
 -record(message, {
     frames = [] :: list(#frame{}),
