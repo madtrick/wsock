@@ -96,35 +96,38 @@ decode(Data, continue_message, Message, Masked) ->
 -spec do_decode(Data::binary(), Type:: message_type(), Acc::list(), Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
 do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
-  case Masked of
-    true ->
-      All = lists:all(fun(F)-> F#frame.mask == 1 end, Frames),
-      case All of
-        true ->
-          case process_frames(Type, Frames, Acc) of
-            {error, Reason} ->
-              {error, Reason};
-            Messages ->
-              lists:reverse(Messages)
-          end;
-          %lists:reverse(process_frames(Type, Frames, Acc));
-        false ->
-          {error, frames_unmasked}
-      end;
-    false ->
-      Any = lists:any(fun(F) -> F#frame.mask == 1 end, Frames),
-      case Any of
-        true ->
-          {error, frames_masked};
-        false ->
-          case process_frames(Type, Frames, Acc) of
-            {error, Reason} ->
-              {error, Reason};
-            Messages ->
-              lists:reverse(Messages)
-          end
-          %lists:reverse(process_frames(Type, Frames, Acc))
-      end
+  do_decode_frames(Masked, Type, Frames, Acc).
+
+-spec do_decode_frames(Masked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+do_decode_frames(_Masked = true, Type, Frames, Acc) ->
+  do_decode_masked_frames(ensure_all_frames_mask_value(Frames, 1), Type, Frames, Acc);
+
+do_decode_frames(_Masked = false, Type, Frames, Acc) ->
+  do_decode_unmasked_frames(ensure_all_frames_mask_value(Frames, 0), Type, Frames, Acc).
+
+-spec do_decode_masked_frames(AllFramesMasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+do_decode_masked_frames(_AllFramesMasked = true, Type, Frames, Acc) ->
+  transform_frames_into_messages(Type, Frames, Acc);
+do_decode_masked_frames(_AllFramesMasked = false, _, _, _)  ->
+  {error, frames_unmasked}.
+
+-spec do_decode_unmasked_frames(AllFramesUnmasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+do_decode_unmasked_frames(_AllFramesUnmasked = true, Type, Frames, Acc) ->
+  transform_frames_into_messages(Type, Frames, Acc);
+do_decode_unmasked_frames(_AllFramesUnmasked = false, _, _, _) ->
+  {error, frames_masked}.
+
+-spec ensure_all_frames_mask_value(Frames :: list(#frame{}), Value :: integer()) -> true | false.
+ensure_all_frames_mask_value(Frames, Value) ->
+  lists:all(fun(F) -> F#frame.mask == Value end, Frames).
+
+-spec transform_frames_into_messages(Type :: message_type(), Frames :: list(#frame{}), Acc :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
+transform_frames_into_messages(Type, Frames, Acc) ->
+  case process_frames(Type, Frames, Acc) of
+    {error, Reason} ->
+      {error, Reason};
+    Messages ->
+      lists:reverse(Messages)
   end.
 
 -spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
