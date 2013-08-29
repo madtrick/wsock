@@ -150,29 +150,30 @@ wtf([Frame | Frames], Type, XMessage, Acc) ->
   end.
 
 -spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: #message{})-> {fragmented | completed, #message{}} | {error, fragmented_control_message}.
-process_frame(Frame, begin_message, Message) ->
-  case contextualize_frame(Frame) of
-    control_fragment ->
-      {error, fragmented_control_message};
-    open_close ->
-      BuiltMessage = build_message(Message, [Frame]),
-      {completed, BuiltMessage};
-    open_continue ->
-      Frames = Message#message.frames,
-      {fragmented, Message#message{frames = [Frame | Frames]}}
-  end;
+process_frame(Frame, MessageType, Message) ->
+  process_frame(contextualize_frame(Frame), MessageType, Frame, Message).
 
-process_frame(Frame, continue_message, Message) ->
-  case contextualize_frame(Frame) of
-    control_fragment ->
-      {error, fragmented_control_message};
-    continue ->
-      Frames = Message#message.frames,
-      {fragmented, Message#message{frames = [Frame | Frames]}};
-    continue_close ->
-      BuiltMessage = build_message(Message, lists:reverse([Frame | Message#message.frames])),
-      {completed, BuiltMessage}
-  end.
+-spec process_frame(FrameType :: atom(), MessageType :: message_type(), Frame :: #frame{}, Message :: #message{}) -> {frame | completed, #message{}} | {error, fragmented_control_message}.
+process_frame(control_fragment, _ ,_, _) ->
+  {error, fragmented_control_message};
+process_frame(open_close, begin_message, Frame, Message) ->
+  frame_to_complete_message(Frame, Message);
+process_frame(open_continue, begin_message, Frame, Message) ->
+  frame_for_fragmented_message(Frame, Message);
+process_frame(continue, continue_message, Frame, Message) ->
+  frame_for_fragmented_message(Frame, Message);
+process_frame(continue_close, continue_message, Frame, Message) ->
+  frame_to_complete_message(Frame, Message).
+
+frame_to_complete_message(Frame, Message) ->
+  BuiltMessage = build_message(Message, lists:reverse([Frame | Message#message.frames])),
+  {completed, BuiltMessage}.
+frame_for_fragmented_message(Frame, Message) ->
+  {fragmented, append_frame_to_fragmented_message(Frame, Message)}.
+
+append_frame_to_fragmented_message(Frame, Message) ->
+  Frames = Message#message.frames,
+  Message#message{frames = [Frame | Frames]}.
 
 -spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close | control_fragment.
 contextualize_frame(Frame) ->
