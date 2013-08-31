@@ -452,6 +452,21 @@ spec() ->
                             assert_that(Frame#frame.raw, is(LastFragment))
                             end)
                       end)
+                end),
+              describe("when new data is received", fun() ->
+                    it("should complete the fragmented frame", fun() ->
+                            Data = crypto:rand_bytes(140),
+                            DataLen = byte_size(Data),
+                            BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, 126, DataLen, Data),
+                            <<FirstFragment:3/binary, SecondFragment/binary>> = BinFrame,
+
+                            [FragmentedFrame] = wsock_framing:from_binary(FirstFragment),
+                            [Frame] = wsock_framing:from_binary(SecondFragment, FragmentedFrame),
+
+                            assert_that(Frame#frame.fragmented, is(false)),
+                            assert_that(Frame#frame.payload, is(Data)),
+                            assert_that(Frame#frame.raw, is(<<>>))
+                      end)
                 end)
           end)
     end),

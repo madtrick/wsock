@@ -25,7 +25,8 @@
     masking_key :: integer(),
     payload :: binary(),
     fragmented :: boolean(),
-    raw :: byte() % raw data for a fragmented frame
+    raw :: byte(), % raw data for a fragmented frame
+    next_piece :: atom()
   }).
 
 -record(message, {

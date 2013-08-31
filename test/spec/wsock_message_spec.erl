@@ -351,6 +351,25 @@ spec() ->
                     assert_that(Message1#message.payload, is(BinPayload1)),
                     assert_that(Message2#message.type, is(fragmented)),
                     assert_that(length(Message2#message.frames), is(1))
+                end),
+              describe("fragmented frames", fun() ->
+                    it("should return a fragmented message", fun() ->
+                          FakeFrame = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, crypto:rand_bytes(10)),
+                          FakeFragmentedFrame = <<
+                            1:1, % Fin
+                            0:1, % Rsv1
+                            0:1, % Rsv2
+                            0:1, % Rsv3
+                            0:4  % Opcode
+                          >>, %Note that I'm fragmenting at byte boundary
+
+                          Data = <<FakeFrame/binary, FakeFragmentedFrame/binary>>,
+                          [Message] = wsock_message:decode(Data, []),
+
+                          assert_that(Message#message.type, is(fragmented)),
+                          assert_that(length(Message#message.frames), is(2))
+                      end),
+                    it("should complete a fragmented message")
                 end)
 
           end),
