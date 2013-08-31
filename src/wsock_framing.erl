@@ -50,95 +50,70 @@ to_binary(Frame) ->
 -spec from_binary(Data::binary()) -> list(#frame{}).
 from_binary(Data) ->
   lists:reverse(from_binary(Data, [])).
+  %lists:reverse(from_binary(Data, first_byte, #frame{}, [])).
 
-from_binary(Data = <<_:8, Mask:1, PayloadLen:7, Trailing/bits>>, Acc) ->
-  PayloadBytes=  case PayloadLen of
-    126 ->
-      <<ExtPayloadLen:16, _/binary>> = Trailing,
-      2 + ExtPayloadLen;
-    127 ->
-      <<ExtPayloadLen:64, _/binary>> = Trailing,
-      8 + ExtPayloadLen;
-    _ ->
-      PayloadLen
-  end,
-  FrameSize = 2 + (PayloadBytes ) + Mask * 4,
-  case FrameSize > byte_size(Data) of
-    true ->
-      [ decode_fragmented_frame(Data) | Acc];
-    false ->
-      <<Frame:FrameSize/binary, Rest/binary>> = Data,
-      from_binary(Rest, [decode_frame(Frame) | Acc])
-  end;
-
-from_binary(<<>>, Acc) ->
-  Acc.
-
-decode_fragmented_frame(Data) ->
-  #frame{ fragmented = true, raw = Data }.
-
-
-decode_frame(Data = <<Fin:1, Rsv1:1, Rsv2:1, Rsv3:1, Opcode:4, Mask:1, _/bits>> ) ->
-  % TODO: ensure that Mask is not set
-
-  Frame = #frame{
-    fin = Fin,
-    rsv1 = Rsv1, rsv2 = Rsv2, rsv3 = Rsv3,
-    opcode = Opcode,
-    mask = Mask
-  },
-
-  Frame2 = binary_payload_length(Data, Frame),
-  binary_payload(Data, Frame2).
-
--spec binary_payload_length(Data::binary(), Frame::#frame{}) -> #frame{}.
-binary_payload_length(Data, Frame) ->
-  <<_:9, PayloadLen:7, _/binary>> = Data,
-  case PayloadLen of
-    126 ->
-      <<_:16, ExtendedPayloadLen:16, _/binary>> = Data,
-      Frame#frame{payload_len = PayloadLen, extended_payload_len = ExtendedPayloadLen};
-    127 ->
-      <<_:16, ExtendedPayloadLenCont:64, _/binary>> = Data,
-      Frame#frame{payload_len = PayloadLen, extended_payload_len_cont = ExtendedPayloadLenCont};
-    _ ->
-      Frame#frame{payload_len = PayloadLen}
+next_piece_from_binary(Data, RequiredSize, PieceDescription) ->
+  case assert_required_bytes(Data, RequiredSize) of
+    true -> PieceDescription;
+    false -> not_enough_bytes
   end.
 
--spec binary_payload(Data::binary(), Frame::#frame{}) -> #frame{}.
-binary_payload(Data, Frame) ->
-  case Frame#frame.mask of
-    0 ->
-      case Frame#frame.payload_len of
-        126 ->
-          <<_:32, Payload/binary>> = Data;
-        127 ->
-          <<_:80, Payload/binary>> = Data;
-        _ ->
-          <<_:16, Payload/binary>> = Data
-      end,
+assert_required_bytes(Data, RequiredSize) ->
+  byte_size(Data) >= RequiredSize.
 
-      case Frame#frame.opcode of
-        _ ->
-          Frame#frame{ payload = Payload }
-      end;
-    1 ->
-      case Frame#frame.payload_len of
-        126 ->
-          <<_:32, MaskingKey:32, Payload/binary>> = Data;
-        127 ->
-          <<_:80, MaskingKey:32, Payload/binary>> = Data;
-        _ ->
-          <<_:16, MaskingKey:32, Payload/binary>> = Data
-      end,
+from_binary(Data, Acc) ->
+  new_frame_decoding(Data, Acc).
 
-      Frame2 = Frame#frame{masking_key = MaskingKey},
+new_frame_decoding(<<>>, Acc) ->
+  Acc;
+new_frame_decoding(Data, Acc) ->
+  {Frame, Rest} = from_binary(Data, first_byte, #frame{}),
+  new_frame_decoding(Rest, [Frame | Acc]).
 
-      case Frame2#frame.opcode of
-        _ ->
-          Frame2#frame{ payload = mask(Payload, MaskingKey, <<>>) }
-      end
-  end.
+from_binary(Data, not_enough_bytes, Frame) ->
+  {Frame#frame{fragmented = true, raw = Data}, <<>>};
+from_binary(<<Fin:1, Rsv1:1, Rsv2: 1, Rsv3:1, Opcode:4, Rest/binary>>, first_byte, Frame) ->
+  NewFrame = Frame#frame{ fin = Fin, rsv1 = Rsv1, rsv2 = Rsv2, rsv3 = Rsv3, opcode = Opcode },
+  from_binary(Rest, next_piece_from_binary(Rest, 1, second_byte), NewFrame);
+from_binary(<<Mask:1, 127:7, Rest/binary>>, second_byte, Frame) ->
+  NewFrame = Frame#frame{ mask = Mask, payload_len = 127 },
+  from_binary(Rest, next_piece_from_binary(Rest, 8, extended_payload_length_cont), NewFrame);
+from_binary(<<Mask:1, 126:7, Rest/binary>>, second_byte, Frame) ->
+  NewFrame = Frame#frame{ mask = Mask, payload_len = 126 },
+  from_binary(Rest, next_piece_from_binary(Rest, 2, extended_payload_length), NewFrame);
+from_binary(<<Mask:1, PayloadLen:7, Rest/binary>>, second_byte, Frame) ->
+  NewFrame = Frame#frame{ mask = Mask, payload_len = PayloadLen },
+  from_binary(Rest, next_piece_from_binary(Rest, 4, masking_key), NewFrame);
+from_binary(<<ExtendedPayloadLength:16, Rest/binary>>, extended_payload_length, Frame)->
+  NewFrame = Frame#frame{ extended_payload_len = ExtendedPayloadLength },
+  from_binary(Rest, next_piece_from_binary(Rest, 4, masking_key), NewFrame);
+from_binary(<<ExtendedPayloadLengthCont:64, Rest/binary>>, extended_payload_length_cont, Frame)->
+  NewFrame = Frame#frame{ extended_payload_len_cont = ExtendedPayloadLengthCont },
+  from_binary(Rest, next_piece_from_binary(Rest, 4, masking_key), NewFrame);
+from_binary(Data, masking_key, Frame = #frame{ mask = 0 })->
+  from_binary(Data, next_piece_from_binary(Data, real_payload_length(Frame), payload), Frame);
+from_binary(<<MaskKey:32, Rest/binary>>, masking_key, Frame)->
+  NewFrame = Frame#frame{ masking_key = MaskKey },
+  from_binary(Rest, next_piece_from_binary(Rest, real_payload_length(Frame), payload), NewFrame);
+
+from_binary(Data, payload, Frame = #frame{ mask = 1, masking_key = MaskingKey })->
+  RL = real_payload_length(Frame),
+  <<Payload:RL/binary, Rest/binary>> = Data,
+  NewFrame = Frame#frame{ payload = mask(Payload, MaskingKey, <<>>) },
+  {NewFrame, Rest};
+from_binary(Data, payload, Frame)->
+  RL = real_payload_length(Frame),
+  <<Payload:RL/binary, Rest/binary>> = Data,
+  NewFrame = Frame#frame{ payload = Payload },
+  {NewFrame, Rest}.
+
+real_payload_length(Frame = #frame{ payload_len = 126 }) ->
+  Frame#frame.extended_payload_len;
+real_payload_length(Frame = #frame{ payload_len = 127 }) ->
+  Frame#frame.extended_payload_len_cont;
+real_payload_length(Frame) ->
+  Frame#frame.payload_len.
+
 
 extended_payload_len_bit_width(PayloadLen, Max) ->
   case PayloadLen of
