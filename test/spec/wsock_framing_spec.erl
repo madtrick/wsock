@@ -419,6 +419,39 @@ spec() ->
                           assert_that(Frame#frame.opcode, is(1)),
                           assert_that(Frame#frame.raw, is(<<>>))
                       end)
+                end),
+              describe("when there's only 16 bits of data", fun() ->
+                    it("shoudl return a fragmented frame", fun() ->
+                          Data = crypto:rand_bytes(20),
+                          DataLen = byte_size(Data),
+                          BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, DataLen, 0, Data),
+                          <<Fragment:2/binary, _/binary>> = BinFrame,
+
+                          [Frame] = wsock_framing:from_binary(Fragment),
+
+                          assert_that(Frame#frame.fragmented, is(true)),
+                          assert_that(Frame#frame.mask, is(0)),
+                          assert_that(Frame#frame.payload_len, is(DataLen)),
+                          assert_that(Frame#frame.raw, is(<<>>))
+                      end)
+                end),
+              describe("when there's only 24 bits of data", fun() ->
+                    describe("when payload length is extended", fun() ->
+                          it("should not set the extended payload length", fun() ->
+                            Data = crypto:rand_bytes(140),
+                            DataLen = byte_size(Data),
+                            BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, 126, DataLen, Data),
+                            <<Fragment:3/binary, _/binary>> = BinFrame,
+                            <<_:2/binary, LastFragment/binary>> = Fragment,
+
+                            [Frame] = wsock_framing:from_binary(Fragment),
+
+                            assert_that(Frame#frame.fragmented, is(true)),
+                            assert_that(Frame#frame.payload_len, is(126)),
+                            assert_that(Frame#frame.extended_payload_len, is(undefined)),
+                            assert_that(Frame#frame.raw, is(LastFragment))
+                            end)
+                      end)
                 end)
           end)
     end),
