@@ -343,6 +343,13 @@ spec() ->
                           assert_that(Frame#frame.payload, is(Data))
                       end)
                 end),
+              describe("when payload length is 0", fun() ->
+                    it("should set fragmented to true", fun() ->
+                          {_, Frame} = (spec_get(frame_builder))(0, 0, 0, 0, <<>>),
+
+                          assert_that(Frame#frame.fragmented, is(false))
+                      end)
+                end),
               describe("when payload length <= 125", fun()->
                     it("should set unmasked data", fun()->
                           (spec_get(validator))(0 ,100)
