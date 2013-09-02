@@ -102,6 +102,8 @@ from_binary(<<ExtendedPayloadLengthCont:64, Rest/binary>>, extended_payload_leng
   from_binary(Rest, next_piece_from_binary(Rest, 4, masking_key), NewFrame);
 from_binary(Data, masking_key, Frame = #frame{ mask = 0 })->
   from_binary(Data, next_piece_from_binary(Data, real_payload_length(Frame), payload), Frame);
+from_binary(Data, masking_key, Frame = #frame{ mask = 0 }) ->
+  from_binary(Data, next_piece_from_binary(Data, real_payload_length(Frame), payload), Frame);
 from_binary(<<MaskKey:32, Rest/binary>>, masking_key, Frame)->
   NewFrame = Frame#frame{ masking_key = MaskKey },
   from_binary(Rest, next_piece_from_binary(Rest, real_payload_length(Frame), payload), NewFrame);

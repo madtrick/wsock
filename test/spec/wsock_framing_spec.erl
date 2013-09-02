@@ -205,7 +205,8 @@ spec() ->
                       X when X > 65536 -> 127
                     end,
                     BinFrame = get_binary_frame(Fin, Rsv, Rsv, Rsv, Opcode, Mask, DataLen, ByteSize, Data),
-                    wsock_framing:from_binary(BinFrame)
+                    [Frame]  = wsock_framing:from_binary(BinFrame),
+                    {BinFrame, Frame}
                 end)
           end),
         describe("non payload fields", fun() ->
@@ -216,7 +217,6 @@ spec() ->
 
 
                           BinFrame = get_binary_frame(1, 0, 0, 0, 1, 0, DataLen, 0, Data),
-                          io:format("Byte size ~w Bit size ~w~n", [byte_size(BinFrame), bit_size(BinFrame)]),
                           [Frame] = wsock_framing:from_binary(BinFrame),
                           assert_that(Frame#frame.fin, is(1))
                       end)
@@ -278,7 +278,7 @@ spec() ->
               describe("mask", fun() ->
                     before_all(fun() ->
                           spec_set(validator, fun(Mask) ->
-                                [Frame] = (spec_get(frame_builder))(0, 0, 1, Mask, crypto:rand_bytes(20)),
+                                {_BinFrame, Frame} = (spec_get(frame_builder))(0, 0, 1, Mask, crypto:rand_bytes(20)),
                                 assert_that(Frame#frame.mask, is(Mask))
                             end)
                       end),
@@ -292,22 +292,23 @@ spec() ->
               describe("payoad lenght", fun()->
                     before_all(fun() ->
                           spec_set(frame, fun(Size) ->
-                                (spec_get(frame_builder))(0, 0, 2, 0, crypto:rand_bytes(Size))
+                                {_BinFrame, Frame} = (spec_get(frame_builder))(0, 0, 2, 0, crypto:rand_bytes(Size)),
+                                Frame
                             end)
                       end),
                     it("set payload length of data with <= 125 bytes", fun() ->
-                          [Frame] = (spec_get(frame))(100),
+                          Frame = (spec_get(frame))(100),
 
                           assert_that(Frame#frame.payload_len, is(100))
                       end),
                     it("set payload length of data with > 125 <= 65536 bytes", fun() ->
-                          [Frame] = (spec_get(frame))(200),
+                          Frame = (spec_get(frame))(200),
 
                           assert_that(Frame#frame.payload_len, is(126)),
                           assert_that(Frame#frame.extended_payload_len, is(200))
                       end),
                     it("set payload length of data with > 65536 bytes", fun() ->
-                          [Frame] = (spec_get(frame))(70000),
+                          Frame = (spec_get(frame))(70000),
 
                           assert_that(Frame#frame.payload_len, is(127)),
                           assert_that(Frame#frame.extended_payload_len_cont, is(70000))
@@ -320,14 +321,16 @@ spec() ->
                             end)
                       end),
                     it("should be undefined if data is unmasked", fun() ->
-                          [Frame] = (spec_get(frame))(0),
+                          {_, Frame} = (spec_get(frame))(0),
 
                           assert_that(Frame#frame.masking_key, is(undefined))
                       end),
                     it("should be set if data is masked", fun() ->
-                          [Frame] = (spec_get(frame))(1),
+                          {BinFrame, Frame} = (spec_get(frame))(1),
+                          <<_:2/binary, MK:32/integer, _/binary>> = BinFrame,
 
-                          assert_that(Frame#frame.masking_key, is_not(undefined))
+                          assert_that(Frame#frame.masking_key, is_not(undefined)),
+                          assert_that(Frame#frame.masking_key, is(MK))
                       end)
               end)
         end),
@@ -335,7 +338,7 @@ spec() ->
               before_all(fun() ->
                     spec_set(validator, fun(Mask, Size) ->
                           Data = crypto:rand_bytes(Size),
-                          [Frame] = (spec_get(frame_builder))(0, 0, 2, Mask, Data),
+                          {_BinFrame, Frame} = (spec_get(frame_builder))(0, 0, 2, Mask, Data),
 
                           assert_that(Frame#frame.payload, is(Data))
                       end)
