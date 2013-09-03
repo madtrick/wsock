@@ -94,6 +94,18 @@ decode(Data, continue_message, Message, Masked) ->
   do_decode(Data, continue_message, [Message | []], Masked).
 
 -spec do_decode(Data::binary(), Type:: message_type(), Acc::list(), Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+do_decode(Data, continue_message, [FragmentedMessage | Acc] = Messages, Masked) ->
+  [LastFrame | TailFrames] = FragmentedMessage#message.frames,
+
+  case LastFrame#frame.fragmented of
+    true ->
+      Frames = wsock_framing:from_binary(Data, LastFrame),
+      do_decode_frames(Masked, continue_message, Frames, [FragmentedMessage#message{ frames = TailFrames } | Acc]);
+    false ->
+      Frames = wsock_framing:from_binary(Data),
+      do_decode_frames(Masked, continue_message, Frames, Messages)
+  end;
+
 do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
   do_decode_frames(Masked, Type, Frames, Acc).
@@ -119,7 +131,12 @@ do_decode_unmasked_frames(_AllFramesUnmasked = false, _, _, _) ->
 
 -spec ensure_all_frames_mask_value(Frames :: list(#frame{}), Value :: integer()) -> true | false.
 ensure_all_frames_mask_value(Frames, Value) ->
-  lists:all(fun(F) -> F#frame.mask == Value end, Frames).
+  lists:all(
+    fun(#frame{ fragmented = true }) ->
+        true;
+    (F) ->
+        F#frame.mask == Value
+    end, Frames).
 
 -spec transform_frames_into_messages(Type :: message_type(), Frames :: list(#frame{}), Acc :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
 transform_frames_into_messages(Type, Frames, Acc) ->
@@ -156,26 +173,31 @@ process_frame(Frame, MessageType, Message) ->
 -spec process_frame(FrameType :: atom(), MessageType :: message_type(), Frame :: #frame{}, Message :: #message{}) -> {frame | completed, #message{}} | {error, fragmented_control_message}.
 process_frame(control_fragment, _ ,_, _) ->
   {error, fragmented_control_message};
-process_frame(open_close, begin_message, Frame, Message) ->
+process_frame(open_close, _, Frame, Message) ->
   frame_to_complete_message(Frame, Message);
-process_frame(open_continue, begin_message, Frame, Message) ->
+process_frame(open_continue, _, Frame, Message) ->
   frame_for_fragmented_message(Frame, Message);
 process_frame(continue, continue_message, Frame, Message) ->
   frame_for_fragmented_message(Frame, Message);
 process_frame(continue_close, continue_message, Frame, Message) ->
-  frame_to_complete_message(Frame, Message).
+  frame_to_complete_message(Frame, Message);
+process_frame(fragmented_frame, _, Frame, Message) ->
+  frame_for_fragmented_message(Frame, Message).
 
 frame_to_complete_message(Frame, Message) ->
-  BuiltMessage = build_message(Message, lists:reverse([Frame | Message#message.frames])),
+  UpdatedMessage = append_frame_to_message(Frame, Message),
+  BuiltMessage   = build_message(UpdatedMessage, lists:reverse(UpdatedMessage#message.frames)),
   {completed, BuiltMessage}.
 frame_for_fragmented_message(Frame, Message) ->
-  {fragmented, append_frame_to_fragmented_message(Frame, Message)}.
+  {fragmented, append_frame_to_message(Frame, Message)}.
 
-append_frame_to_fragmented_message(Frame, Message) ->
+append_frame_to_message(Frame, Message) ->
   Frames = Message#message.frames,
   Message#message{frames = [Frame | Frames]}.
 
 -spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close | control_fragment.
+contextualize_frame(#frame{ fragmented = true }) ->
+  fragmented_frame;
 contextualize_frame(Frame) ->
   case {Frame#frame.fin, Frame#frame.opcode} of
     {1, 0} -> continue_close;

@@ -337,11 +337,7 @@ spec() ->
                     FakeFragment3 = get_binary_frame(1, 0, 0, 0, 0, 0, 10, 0, Payload3),
 
                     BinPayload2 = crypto:rand_bytes(10),
-                    <<
-                    Payload4:10/binary,
-                    _/binary
-                    >> = BinPayload2,
-                    FakeFragment4 = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, Payload4),
+                    FakeFragment4 = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, BinPayload2),
 
                     Data = << FakeFragment1/binary, FakeFragment2/binary, FakeFragment3/binary, FakeFragment4/binary>>,
 
@@ -349,27 +345,60 @@ spec() ->
 
                     assert_that(Message1#message.type, is(binary)),
                     assert_that(Message1#message.payload, is(BinPayload1)),
+                    assert_that(length(Message1#message.frames), is(3)),
                     assert_that(Message2#message.type, is(fragmented)),
                     assert_that(length(Message2#message.frames), is(1))
                 end),
               describe("fragmented frames", fun() ->
                     it("should return a fragmented message", fun() ->
                           FakeFrame = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, crypto:rand_bytes(10)),
-                          FakeFragmentedFrame = <<
-                            1:1, % Fin
-                            0:1, % Rsv1
-                            0:1, % Rsv2
-                            0:1, % Rsv3
-                            0:4  % Opcode
-                          >>, %Note that I'm fragmenting at byte boundary
 
-                          Data = <<FakeFrame/binary, FakeFragmentedFrame/binary>>,
+                          <<Data:1/binary, _/binary>> = FakeFrame,
                           [Message] = wsock_message:decode(Data, []),
 
                           assert_that(Message#message.type, is(fragmented)),
-                          assert_that(length(Message#message.frames), is(2))
+                          assert_that(length(Message#message.frames), is(1))
                       end),
-                    it("should complete a fragmented message")
+                    it("should return a fragmented message that is made up of more that one frame", fun() ->
+                          Payload = crypto:rand_bytes(10),
+                          FakeFrame = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, Payload),
+
+                          <<FirstFragment:1/binary, SecondFragment/binary>> = FakeFrame,
+                          [FragmentedMessage] = wsock_message:decode(FirstFragment, []),
+                          [Message] = wsock_message:decode(SecondFragment, FragmentedMessage, []),
+
+                          assert_that(Message#message.type, is(fragmented)),
+                          assert_that(length(Message#message.frames), is(1))
+                      end),
+                    it("should complete a fragmented message that is made up of one frame", fun() ->
+                          Payload = crypto:rand_bytes(10),
+                          FakeFrame = get_binary_frame(1, 0, 0, 0, 2, 0, 10, 0, Payload),
+
+                          <<FirstFragment:1/binary, SecondFragment/binary>> = FakeFrame,
+                          [FragmentedMessage] = wsock_message:decode(FirstFragment, []),
+                          [Message] = wsock_message:decode(SecondFragment, FragmentedMessage, []),
+
+                          assert_that(Message#message.type, is(binary)),
+                          assert_that(length(Message#message.frames), is(1)),
+                          assert_that(Message#message.payload, is(Payload))
+                      end),
+                    it("should complete a fragmented message that is made up of more than one frame", fun() ->
+                          Data = crypto:rand_bytes(20),
+                          <<DataFrame1:10/binary, DataFrame2/binary>> = Data,
+                          FakeFrame1 = get_binary_frame(0, 0, 0, 0, 2, 0, 10, 0, DataFrame1),
+                          FakeFrame2 = get_binary_frame(1, 0, 0, 0, 0, 0, 10, 0, DataFrame2),
+
+                          <<FakeFrameFragment1:3/binary, FakeFrameFragment2/binary>> = FakeFrame2,
+
+
+                          InputData = <<FakeFrame1/binary, FakeFrameFragment1/binary>>,
+                          [FragmentedMessage] = wsock_message:decode(InputData, []),
+                          [Message] = wsock_message:decode(FakeFrameFragment2, FragmentedMessage, []),
+
+                          assert_that(Message#message.type, is(binary)),
+                          assert_that(length(Message#message.frames), is(2)),
+                          assert_that(Message#message.payload, is(Data))
+                      end)
                 end)
 
           end),

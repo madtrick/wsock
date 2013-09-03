@@ -69,11 +69,12 @@ new_frame_decoding(Data, Acc) ->
   new_frame_decoding(Rest, [Frame | Acc]).
 
 continue_from_binary(Data, FragmentedFrame, Acc) ->
-  {Frame, Rest} = from_binary(<<(FragmentedFrame#frame.raw)/binary, Data/binary>>, FragmentedFrame#frame.next_piece, FragmentedFrame),
+  ComposedData = <<(FragmentedFrame#frame.raw)/binary, Data/binary>>,
+  {Frame, Rest} = from_binary(ComposedData, next_piece_from_binary(ComposedData, FragmentedFrame#frame.next_piece_size, FragmentedFrame#frame.next_piece), FragmentedFrame),
   new_frame_decoding(Rest, [Frame | Acc]).
 
-from_binary(Data, {not_enough_bytes, ExpectedNextPiece}, Frame) ->
-  {Frame#frame{fragmented = true, raw = Data, next_piece = ExpectedNextPiece}, <<>>};
+from_binary(Data, {not_enough_bytes, ExpectedNextPiece, ExpectedSize}, Frame) ->
+  {Frame#frame{fragmented = true, raw = Data, next_piece = ExpectedNextPiece, next_piece_size = ExpectedSize}, <<>>};
 from_binary(<<Fin:1, Rsv1:1, Rsv2: 1, Rsv3:1, Opcode:4, Rest/binary>>, first_byte, Frame) ->
   NewFrame = Frame#frame{ fin = Fin, rsv1 = Rsv1, rsv2 = Rsv2, rsv3 = Rsv3, opcode = Opcode },
   from_binary(Rest, next_piece_from_binary(Rest, 1, second_byte), NewFrame);
@@ -114,7 +115,7 @@ extract_payload(Data, Frame) ->
   {Payload, Rest}.
 
 finish_frame(Frame) ->
-  Frame#frame{ fragmented = false, raw = <<>>, next_piece = undefined }.
+  Frame#frame{ fragmented = false, raw = <<>>, next_piece = undefined, next_piece_size = undefined}.
 
 real_payload_length(Frame = #frame{ payload_len = 126 }) ->
   Frame#frame.extended_payload_len;
@@ -137,7 +138,7 @@ payload_or_masking_key(Data, Frame) ->
 next_piece_from_binary(Data, RequiredSize, PieceDescription) ->
   case assert_required_bytes(Data, RequiredSize) of
     true -> PieceDescription;
-    false -> {not_enough_bytes, PieceDescription}
+    false -> {not_enough_bytes, PieceDescription, RequiredSize}
   end.
 
 assert_required_bytes(Data, RequiredSize) ->

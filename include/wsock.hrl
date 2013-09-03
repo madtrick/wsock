@@ -26,7 +26,8 @@
     payload :: binary(),
     fragmented :: boolean(),
     raw :: byte(), % raw data for a fragmented frame
-    next_piece :: atom()
+    next_piece :: atom(),
+    next_piece_size :: integer()
   }).
 
 -record(message, {
