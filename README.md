@@ -1,3 +1,5 @@
+[![Analytics](https://ga-beacon.appspot.com/UA-46795389-1/wsock/README)](https://github.com/igrigorik/ga-beacon)
+
 WSOCK
 -----
 
