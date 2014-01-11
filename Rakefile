@@ -14,6 +14,10 @@ task :getdeps do
   sh "rebar get-deps"
 end
 
+task :doc do
+  sh "rebar doc"
+end
+
 task :gettestdeps do
   sh "rebar -C rebar.tests.config get-deps"
 end
