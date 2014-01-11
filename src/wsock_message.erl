@@ -12,8 +12,6 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
-%% @hidden
-
 -module(wsock_message).
 -include("wsock.hrl").
 
@@ -22,8 +20,53 @@
 
 -define(FRAGMENT_SIZE, 4096).
 -type message_type() :: begin_message | continue_message.
+-type decode_options() :: masked().
+-type encode_options() :: [encode_types() | mask()].
+-type masked() :: masked.
+-type mask() :: mask.
+-type encode_types() :: text | binary | close | ping | pong.
 
--spec encode(Data::string() | binary(), Options::list()) -> [binary()] | {error, missing_datatype}.
+% @type message() = #message{
+%   frames = [] | list(frame()),
+%   payload = string() | binary(),
+%   type = text | binary | close | ping | pong | fragmented
+% }
+-record(message, {
+    frames = [] :: [] | list(#frame{}),
+    payload :: string() | binary(), % FALSE!!! what about control message with code + message
+    type :: text | binary | close | ping | pong | fragmented
+  }).
+-type message() :: #message{}.
+
+% @doc Encodes Data into WebSockets frames and returns an iolist with those
+% frames.
+%
+% Options can be:
+%
+% <dl>
+%   <dt>`text'</dt>
+%   <dd>To encode data as text messages</dd>
+%
+%   <dt>`binary'</dt>
+%   <dd>To encode data as binary messages</dd>
+%
+%   <dt>`close'</dt>
+%   <dd>To encode data as close messages</dd>
+%
+%   <dt>`ping'</dt>
+%   <dd>To encode data as ping messages</dd>
+%
+%   <dt>`pong'</dt>
+%   <dd>To encode data as pong messages</dd>
+%
+%   <dt>`mask'</dt>
+%   <dd>To mask the data (i.e. when it is send from clients to servers)</dd>
+%
+% </dl>
+%
+% One of the `text', `binary', `close', `ping' or `pong' options is required.
+%
+-spec encode(Data::string() | binary(), Options::encode_options()) -> [binary()] | {error, missing_datatype}.
 encode(Data, Options) when is_list(Data) ->
   encode(list_to_binary(Data), Options);
 
@@ -36,12 +79,33 @@ encode(Data, Options) ->
   end.
 
 
--spec decode(Data::binary(), Options::list()) -> list(#message{}).
+% @doc Decodes received frames and returns a list of messages
+%
+% Options can be:
+%
+% <dl>
+%   <dt>`masked'</dt>
+%   <dd>Data contains masked data. By default, if this option is not present,
+%   the library will consider the data as not masked.
+%   </dd>
+% </dl>
+%
+% If a received message is fragmented (WebSocket or TCP fragmentation), this 
+% message must be given as parameter to {@link decode/3} when new data is ready to be
+% decoded.
+%
+-spec decode(Data::binary(), Options::list(decode_options())) ->
+  [] | list(message()) | {error, fragmented_control_message | frames_masked |
+    frames_unmasked}.
 decode(Data, Options) ->
   Masked = proplists:get_value(masked, Options, false),
   decode(Data, begin_message, #message{}, Masked).
 
--spec decode(Data::binary(), Message::#message{}, Options::list()) -> list(#message{}).
+% @see decode/2
+% @doc Decodes received frames and tries to complete a previous fragmented message.
+-spec decode(Data::binary(), Message::message(), Options::list(decode_options())) ->
+  [] | list(message()) | {error, fragmented_control_message | frames_masked |
+    frames_unmasked}.
 decode(Data, Message, Options) ->
   Masked = proplists:get_value(masked, Options, false),
   decode(Data, continue_message, Message, Masked).
@@ -86,14 +150,14 @@ frame(Data, Options) ->
   Frame = wsock_framing:frame(Data, Options),
   wsock_framing:to_binary(Frame).
 
--spec decode(Data::binary(), Type :: message_type(), Message::#message{}, Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+-spec decode(Data::binary(), Type :: message_type(), Message::message(), Masked::boolean()) -> list(message()) | {error, frames_unmasked | fragmented_control_message}.
 decode(Data, begin_message, _Message, Masked) ->
   do_decode(Data, begin_message, [], Masked);
 
 decode(Data, continue_message, Message, Masked) ->
   do_decode(Data, continue_message, [Message | []], Masked).
 
--spec do_decode(Data::binary(), Type:: message_type(), Acc::list(), Masked::boolean()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+-spec do_decode(Data::binary(), Type:: message_type(), Acc::list(), Masked::boolean()) -> list(message()) | {error, frames_unmasked | fragmented_control_message}.
 do_decode(Data, continue_message, [FragmentedMessage | Acc] = Messages, Masked) ->
   [LastFrame | TailFrames] = FragmentedMessage#message.frames,
 
@@ -110,20 +174,20 @@ do_decode(Data, Type, Acc, Masked) ->
   Frames = wsock_framing:from_binary(Data),
   do_decode_frames(Masked, Type, Frames, Acc).
 
--spec do_decode_frames(Masked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+-spec do_decode_frames(Masked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(message()) | {error, frames_unmasked | fragmented_control_message}.
 do_decode_frames(_Masked = true, Type, Frames, Acc) ->
   do_decode_masked_frames(ensure_all_frames_mask_value(Frames, 1), Type, Frames, Acc);
 
 do_decode_frames(_Masked = false, Type, Frames, Acc) ->
   do_decode_unmasked_frames(ensure_all_frames_mask_value(Frames, 0), Type, Frames, Acc).
 
--spec do_decode_masked_frames(AllFramesMasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+-spec do_decode_masked_frames(AllFramesMasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(message()) | {error, frames_unmasked | fragmented_control_message}.
 do_decode_masked_frames(_AllFramesMasked = true, Type, Frames, Acc) ->
   transform_frames_into_messages(Type, Frames, Acc);
 do_decode_masked_frames(_AllFramesMasked = false, _, _, _)  ->
   {error, frames_unmasked}.
 
--spec do_decode_unmasked_frames(AllFramesUnmasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(#message{}) | {error, frames_unmasked | fragmented_control_message}.
+-spec do_decode_unmasked_frames(AllFramesUnmasked :: boolean(), Type :: message_type(), Frames :: list(#frame{}), Acc :: list()) -> list(message()) | {error, frames_masked | fragmented_control_message}.
 do_decode_unmasked_frames(_AllFramesUnmasked = true, Type, Frames, Acc) ->
   transform_frames_into_messages(Type, Frames, Acc);
 do_decode_unmasked_frames(_AllFramesUnmasked = false, _, _, _) ->
@@ -138,7 +202,7 @@ ensure_all_frames_mask_value(Frames, Value) ->
         F#frame.mask == Value
     end, Frames).
 
--spec transform_frames_into_messages(Type :: message_type(), Frames :: list(#frame{}), Acc :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
+-spec transform_frames_into_messages(Type :: message_type(), Frames :: list(#frame{}), Acc :: list(message())) -> list(message()) | {error, fragmented_control_message}.
 transform_frames_into_messages(Type, Frames, Acc) ->
   case process_frames(Type, Frames, Acc) of
     {error, Reason} ->
@@ -147,7 +211,7 @@ transform_frames_into_messages(Type, Frames, Acc) ->
       lists:reverse(Messages)
   end.
 
--spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(#message{})) -> list(#message{}) | {error, fragmented_control_message}.
+-spec process_frames(Type:: message_type(), Frames :: list(#frame{}), Messages :: list(message())) -> list(message()) | {error, fragmented_control_message}.
 process_frames(_, [], Acc) ->
   Acc;
 process_frames(begin_message, Frames, Acc) ->
@@ -166,11 +230,11 @@ wtf([Frame | Frames], Type, XMessage, Acc) ->
       process_frames(begin_message, Frames, [Message | Acc])
   end.
 
--spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: #message{})-> {fragmented | completed, #message{}} | {error, fragmented_control_message}.
+-spec process_frame(Frame :: #frame{}, MessageType :: message_type(), Message :: message())-> {fragmented | completed, message()} | {error, fragmented_control_message}.
 process_frame(Frame, MessageType, Message) ->
   process_frame(contextualize_frame(Frame), MessageType, Frame, Message).
 
--spec process_frame(FrameType :: atom(), MessageType :: message_type(), Frame :: #frame{}, Message :: #message{}) -> {frame | completed, #message{}} | {error, fragmented_control_message}.
+-spec process_frame(FrameType :: atom(), MessageType :: message_type(), Frame :: #frame{}, Message :: message()) -> {frame | completed, message()} | {error, fragmented_control_message}.
 process_frame(control_fragment, _ ,_, _) ->
   {error, fragmented_control_message};
 process_frame(open_close, _, Frame, Message) ->

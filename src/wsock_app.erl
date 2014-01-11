@@ -1,3 +1,4 @@
+% @hidden
 -module(wsock_app).
 
 -behaviour(application).

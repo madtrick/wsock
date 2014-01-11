@@ -1,4 +1,4 @@
-
+% @hidden
 -module(wsock_sup).
 
 -behaviour(supervisor).
