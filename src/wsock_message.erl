@@ -195,7 +195,7 @@ append_frame_to_message(Frame, Message) ->
   Frames = Message#message.frames,
   Message#message{frames = [Frame | Frames]}.
 
--spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close | control_fragment.
+-spec contextualize_frame(Frame :: #frame{}) -> continue_close | open_continue | continue | open_close | control_fragment | fragmented_frame.
 contextualize_frame(#frame{ fragmented = true }) ->
   fragmented_frame;
 contextualize_frame(Frame) ->
