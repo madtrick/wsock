@@ -137,11 +137,7 @@ spec() ->
   describe("decode", fun()->
         describe("requests", fun() ->
               it("should return a http_message record of type request", fun() ->
-                    Data = <<"GET / HTTP/1.1\r\n
-                    Host : www.example.org\r\n
-                Upgrade : websocket\r\n
-                Sec-WebSocket-Key : ----\r\n
-                Header-D: D\r\n\r\n">>,
+                Data = <<"GET / HTTP/1.1\r\nHost : www.example.org\r\nUpgrade : websocket\r\nSec-WebSocket-Key : ----\r\nHeader-D: D\r\n\r\n">>,
 
                 {ok, Message} = wsock_http:decode(Data, request),
 
@@ -160,11 +156,7 @@ spec() ->
             end),
           it("should return an error if the message startline is malformed", fun() ->
                 %Missing HTTP method
-                Data = <<" / HTTP/1.1\r\n
-                Host : www.example.org\r\n
-            Upgrade : websocket\r\n
-            Sec-WebSocket-Key : ----\r\n
-            Header-D: D\r\n\r\n">>,
+                Data = <<" / HTTP/1.1\r\nHost : www.example.org\r\nUpgrade : websocket\r\nSec-WebSocket-Key : ----\r\nHeader-D: D\r\n\r\n">>,
 
             Response = wsock_http:decode(Data, request),
 
@@ -172,22 +164,30 @@ spec() ->
         end ),
       it("should return an error if some header is malformed", fun() ->
             %missing ":" in Upgrade header
-            Data = <<"GET / HTTP/1.1\r\n
-            Host : www.example.org\r\n
-        Upgrade  websocket\r\n
-        Header-D: D\r\n\r\n">>,
+            Data = <<"GET / HTTP/1.1\r\nHost : www.example.org\r\nUpgrade  websocket\r\nHeader-D: D\r\n\r\n">>,
 
         Response = wsock_http:decode(Data, request),
 
         assert_that(Response, is({error, malformed_request}))
+    end),
+  describe("should handle fragmented http requests", fun() ->
+        it("should handle a request with only a chunk of the startline", fun() ->
+              Data = <<"GET / ">>,
+
+              Response = wsock_http:decode(Data, request),
+              assert_that(Response, is(fragmented_http_message))
+          end),
+        it("should handle a request with fragmented headers", fun() ->
+              Data = <<"GET / HTTP/1.1\r\nHost">>,
+
+              Response = wsock_http:decode(Data, request),
+              assert_that(Response, is(fragmented_http_message))
+          end)
     end)
 end),
 describe("responses", fun() ->
       it("should return a http_message record of type response", fun() ->
-            Data = <<"HTTP/1.1 205 Reset Content\r\n
-            Header-A: A\r\n
-            Header-C: dGhlIHNhbXBsZSBub25jZQ==\r\n
-            Header-D: D\r\n\r\n">>,
+            Data = <<"HTTP/1.1 205 Reset Content\r\nHeader-A: A\r\nHeader-C: dGhlIHNhbXBsZSBub25jZQ==\r\nHeader-D: D\r\n\r\n">>,
 
             {ok, Message} = wsock_http:decode(Data, response),
 
@@ -202,24 +202,32 @@ describe("responses", fun() ->
             assert_that(wsock_http:get_header_value("header-d", Message), is("D"))
         end),
       it("should return an error if the message startline is malformed", fun() ->
-            Data = <<"HTTP/1.1  Reset Content\r\n
-            Header-A: A\r\n
-            Header-C: dGhlIHNhbXBsZSBub25jZQ==\r\n
-            Header-D: D\r\n\r\n">>,
+            Data = <<"HTTP/1.1  Reset Content\r\nHeader-A: A\r\nHeader-C: dGhlIHNhbXBsZSBub25jZQ==\r\nHeader-D: D\r\n\r\n">>,
 
             Response = wsock_http:decode(Data, response),
 
             assert_that(Response, is({error, malformed_request}))
         end),
       it("should return an error if some header is malformed", fun() ->
-            Data = <<"HTTP/1.1 205 Reset Content\r\n
-            Header-A: A\r\n
-            Header-C  dGhlIHNhbXBsZSBub25jZQ==\r\n
-            Header-D: D\r\n\r\n">>,
+            Data = <<"HTTP/1.1 205 Reset Content\r\nHeader-A: A\r\nHeader-C  dGhlIHNhbXBsZSBub25jZQ==\r\nHeader-D: D\r\n\r\n">>,
 
             Response = wsock_http:decode(Data, response),
 
             assert_that(Response, is({error, malformed_request}))
+        end),
+      describe("should handle fragmented http responses", fun() ->
+            it("should handle a response with only a chunk of the status line", fun() ->
+                  Data = <<"HTTP/1.1 205">>,
+
+                  Response = wsock_http:decode(Data, response),
+                  assert_that(Response, is(fragmented_http_message))
+              end),
+            it("should handle a response with fragmented headers", fun() ->
+                  Data = <<"HTTP/1.1 200 OK\r\nContent-type">>,
+
+                  Response = wsock_http:decode(Data, response),
+                  assert_that(Response, is(fragmented_http_message))
+              end)
         end)
   end)
 end).
