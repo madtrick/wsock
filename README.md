@@ -60,6 +60,8 @@ Create and send an upgrade request to the server.
   	{ok, HandshakeResponse} = wsock_http:decode(Data, response)
   	wsock_handshake:handle_response(HandshakeResponse, HandshakeRequest)
   	```
+  	
+  	If the received HTTP message is fragmented ```wsock_http:decode``` will return the atom ```fragmented_http_message```. Check the section [upgrading the connection when writing servers](#upgrading_server) for more info.
 
 ### Sending data <a name="client_sending"></a>
 Once the connection has been stablished you can send data through it:
@@ -121,6 +123,20 @@ Accept upgrade requests from your clients.
   	{ok, OpenHttpMessage}   = wsock_http:decode(Data, request),
   	{ok, OpenHandshake}     = wsock_handshake:handle_open(OpenHttpMessage)
   	```
+  	
+  	If the received HTTP message is fragmented ```wsock_http:decode``` will return the atom ```fragmented_http_message```. In this case, buffer the partial HTTP message until more data is received and try again. 
+  	
+   ```erlang
+  	fragmented_http_message = wsock_http:decode(Data, request),
+  	
+  	%% Buffer Data
+  	%% … some time passes and then more data is received
+  	%% Concat the new data to the buffered one and pass it to wsock_http:decode
+  	
+  	{ok, OpenHttpMessage} = wsock_http:decode(<<Buffered/binary, NewData/binary>>, request),
+  	…
+  	```
+  	
 
 2. Get handshake key to generate a handshake response:
   

@@ -24,19 +24,21 @@
 
 -spec decode(Data::binary(), Type::request | response) -> {ok,#http_message{}} | {error, malformed_request}.
 decode(Data, Type) ->
-  [StartLine | Headers] = split(Data),
-  StartLineProcessed = process_startline(StartLine, Type),
-  HeadersProcessed = process_headers(Headers),
-
-  case {StartLineProcessed, HeadersProcessed} of
-    {{error, _}, _} ->
+  case process_startline(Data, Type) of
+    fragmented ->
+      fragmented_http_message;
+    {error, _} ->
       {error, malformed_request};
-    {_, {error, _}} ->
-      {error, malformed_request};
-    {{ok, StartLineList}, {ok, HeaderList}} ->
-          {ok, wsock_http:build(Type, StartLineList, HeaderList)}
+    {ok, StartlineFields, Rest} ->
+      case process_headers(Rest) of
+        fragmented ->
+          fragmented_http_message;
+        {error, _} ->
+          {error, malformed_request};
+        {ok, HeadersFields} ->
+          {ok, wsock_http:build(Type, StartlineFields, HeadersFields)}
+      end
   end.
-
 
 -spec build(Type::atom(), StartLine::list({atom(), string()}), Headers::list({string(), string()})) -> #http_message{}.
 build(Type, StartLine, Headers) ->
@@ -81,51 +83,121 @@ get_header_value_case_insensitive(Key, [{Name, Value} | Tail]) ->
 %=============
 % Helpers
 %=============
--spec split(Data::binary()) -> list(binary()).
-split(Data)->
-  Fragments =   lists:map(fun(Element) ->
-        re:replace(Element, <<"^\n*\s*|\n*\s*$">>, <<"">>, [global, {return, binary}])
-    end, binary:split(Data, <<?CTRL>>, [trim, global])),
+-spec ensure_string(Data :: list()) -> list()
+  ;                (Data :: binary()) -> list()
+  ;                (Data :: atom()) -> list().
+ensure_string(Data) when is_list(Data) -> Data;
+ensure_string(Data) when is_binary(Data) -> erlang:binary_to_list(Data);
+ensure_string(Data) when is_integer(Data) -> erlang:integer_to_list(Data);
+ensure_string(Data) -> erlang:atom_to_list(Data).
 
-  lists:filter(fun(Element) ->
-        <<>> =/= Element
-    end, Fragments).
-
--spec process_startline(StartLine::binary(), Type:: request | response) -> {ok, list({atom(), string()})} | {error, nomatch}.
+-spec process_startline(
+  StartLine::binary(),
+  Type:: request | response
+  ) ->
+    fragmented |
+    {ok, list({atom(), string()}), binary()} |
+    {error, term()}.
 process_startline(StartLine, request) ->
-  process_startline(StartLine, "(GET)\s+([\S/])\s+HTTP\/([0-9]\.[0-9])", [method, resource, version]);
+  decode_http_message(http_bin, start_line, StartLine);
 
 process_startline(StartLine, response) ->
-  process_startline(StartLine, "HTTP/([0-9]\.[0-9])\s([0-9]{3,3})\s([a-zA-z0-9 ]+)", [version, status, reason]).
+  decode_http_message(http_bin, status_line, StartLine).
 
--spec process_startline(StartLine::binary(), Regexp::list(), Keys::list(atom())) -> {ok, list({atom(), string()})} | {error, nomatch}.
-process_startline(StartLine, Regexp, Keys) ->
-  case regexp_run(Regexp, StartLine) of
-    {match, [_ | Matchs]} ->
-      {ok , lists:zip(Keys, Matchs)};
-    nomatch -> {error, nomatch}
+-spec decode_http_message(
+  Type  :: atom(),
+  Chunk :: atom(),
+  Data  :: binary()
+  ) ->
+  fragmented |
+  {error, invalid_http_message} |
+  {error, unexpected_http_message} |
+  {ok, [{method, string()} | [{resource, string()} |  {version, string()}]], binary()} |
+  {ok, [{version, string()} | [{status, string()} |  {reason, string()}]], binary()} |
+  {ok, {string(), string()}, binary()} |
+  ok.
+decode_http_message(Type, Chunk, Data) ->
+  case erlang:decode_packet(Type, Data, []) of
+    {more, _} ->
+      fragmented;
+    {error, _} -> 
+      {error, invalid_http_message};
+    {ok, {http_error, _}} ->
+      {error, invalid_http_message};
+    {ok, {http_request, Method, Resource, Version}, Rest} when Chunk == start_line ->
+      {ok, [{method, ensure_string(Method)}, {resource, process_http_uri(Resource)}, {version, process_http_version(Version)}], Rest};
+    {ok, {http_response, Version, Status, Reason}, Rest} when Chunk == status_line ->
+      {ok, [{version, process_http_version(Version)}, {status, ensure_string(Status)}, {reason, ensure_string(Reason)}], Rest};
+    {ok, {http_header, _, Field, _, Value}, Rest} when Chunk == header->
+      {ok, {ensure_string(Field), ensure_string(Value)}, Rest};
+    {ok, http_eoh, _} when Chunk == header ->
+      ok;
+    _ ->
+      {error, unexpected_http_message}
   end.
 
--spec regexp_run(Regexp::list(), String::binary()) -> {match, list()} | nomatch.
-regexp_run(Regexp, String) ->
-  re:run(String, Regexp, [{capture, all, list}, caseless]).
+-spec process_http_uri(
+    '*'
+  ) -> string()
+  ;
+  ({
+    absoluteURI,
+    Protocol :: http | http,
+    Host :: string() | binary(),
+    Port :: inet:port_number() | undefined,
+    Path :: string() | binary()
+  }) -> string()
+  ;
+  ({
+    scheme,
+    Scheme :: string() | binary(),
+    string() | binary()
+  }) -> string()
+  ;
+  ({
+    abs_path,
+    string() | binary()
+  }) -> string().
+process_http_uri('*') ->
+  "*";
+process_http_uri({absoluteURI, Protocol, Host, Port, Path}) ->
+  PortString = case Port of
+    undefined  -> "";
+    Number -> ":" ++ ensure_string(Number)
+  end,
 
+  ensure_string(Protocol) ++ "://" ++ ensure_string(Host) ++  PortString  ++ "/" ++ ensure_string(Path) ;
+process_http_uri({scheme, Scheme, Path}) ->
+  ensure_string(Scheme) ++ Path;
+process_http_uri({abs_path, Path}) ->
+  ensure_string(Path);
+process_http_uri(Uri) ->
+  ensure_string(Uri).
+
+-spec process_http_version({Major :: pos_integer(), Minor :: pos_integer()}) -> string().
+process_http_version({Major, Minor}) ->
+  ensure_string(Major) ++ "." ++ ensure_string(Minor).
 
 -spec process_headers(Headers::list(binary())) -> {ok, list({string(), string()})} | {error, nomatch}.
 process_headers(Headers) ->
   process_headers(Headers, []).
 
--spec process_headers(Headers::list(binary()), Acc::list({list(), list()})) -> {ok, list({string(), string()})} | {error, nomatch}.
-process_headers([Header | Tail], Acc) ->
-  case regexp_run("([!-9;-~]+)\s*:\s*(.+)", Header) of
-    {match, [_Match, HeaderName, HeaderValue]} -> 
-      process_headers(Tail, [{string:strip(HeaderName), HeaderValue} | Acc]);
-    nomatch ->
-      {error, nomatch}
-  end;
-
-process_headers([], Acc) ->
-  {ok, Acc}.
+-spec process_headers(
+  Headers::binary(),
+  Acc::list({list(), list()})
+) ->
+  fragmented |
+  {ok, list({string(), string()})} |
+  {error, invalid_http_message}.
+process_headers(Data, Acc) ->
+  case decode_http_message(httph_bin, header, Data) of
+    {ok, Header, Rest} ->
+      process_headers(Rest, [Header | Acc]);
+    ok ->
+      {ok, Acc};
+    Other ->
+      Other
+  end.
 
 encode_message(StartlineExpr, StartlineFields, Headers) ->
   SL = build_start_line(StartlineExpr, StartlineFields),

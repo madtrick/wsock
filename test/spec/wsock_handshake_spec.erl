@@ -22,13 +22,7 @@ spec() ->
   describe("wsock_handshake", fun() ->
         describe("handle_open", fun() ->
               it("should handle a open-handshake request from the client", fun() ->
-                    BinRequest = list_to_binary(["GET / HTTP/1.1\r\n
-                        Host : server.example.org\r\n
-                        Upgrade : websocket\r\n
-                        Connection : Upgrade\r\n
-                        Sec-WebSocket-Key : AQIDBAUGBwgJCgsMDQ4PEA==\r\n
-                        Sec-WebSocket-Version : 13\r\n\r\n
-                        "]),
+                    BinRequest = list_to_binary(["GET / HTTP/1.1\r\nHost : server.example.org\r\nUpgrade : websocket\r\nConnection : Upgrade\r\nSec-WebSocket-Key : AQIDBAUGBwgJCgsMDQ4PEA==\r\nSec-WebSocket-Version : 13\r\n\r\n"]),
                     {ok, Message} = wsock_http:decode(BinRequest, request),
                     {ok,Response} = wsock_handshake:handle_open(Message),
 
@@ -37,12 +31,7 @@ spec() ->
                 end),
               it("should return an error if the request isn't valid", fun() ->
                     %Missing sec-websocket-key header
-                    BinRequest = list_to_binary(["GET / HTTP/1.1\r\n
-                        Host : server.example.org\r\n
-                        Upgrade : websocket\r\n
-                        Connection : Upgrade\r\n
-                        Sec-WebSocket-Version : 13\r\n\r\n
-                        "]),
+                    BinRequest = list_to_binary(["GET / HTTP/1.1\r\nHost : server.example.org\r\nUpgrade : websocket\r\nConnection : Upgrade\r\nSec-WebSocket-Version : 13\r\n\r\n"]),
                     {ok, Message} = wsock_http:decode(BinRequest, request),
                     {error, invalid_handshake_opening} = wsock_handshake:handle_open(Message)
                 end)
@@ -97,13 +86,7 @@ spec() ->
               {ok, OpenHandShake} = wsock_handshake:open(Resource, Host, Port),
               Key = wsock_http:get_header_value("sec-websocket-key", OpenHandShake#handshake.message),
 
-              BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\n
-              Upgrade: websocket\r\n
-              Connection: upgrade\r\n
-              Sec-Websocket-Accept: ", fake_sec_websocket_accept(Key), "\r\n",
-              "Header-A: A\r\n
-              Header-C: 123123\r\n
-              Header-D: D\r\n\r\n"]),
+              BinResponse = list_to_binary(["HTTP/1.1 101 Switch Protocols\r\nUpgrade: websocket\r\nConnection: upgrade\r\nSec-Websocket-Accept: ", fake_sec_websocket_accept(Key), "\r\n","Header-A: A\r\nHeader-C: 123123\r\nHeader-D: D\r\n\r\n"]),
               {ok, Response} = wsock_http:decode(BinResponse, response),
               
               {ok, Handshake} = wsock_handshake:handle_response(Response, OpenHandShake),
