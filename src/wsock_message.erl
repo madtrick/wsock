@@ -32,12 +32,19 @@
 -type encode_options() :: mask.
 -type encode_types()   :: text | binary | close | ping | pong.
 -type frame_type()     :: encode_types() | continuation.
+-type payload()        :: string() | binary() | {pos_integer(), string()}.
 
 -record(message, {
-    frames = [] :: [] | list(#frame{}),
-    payload :: string() | binary(), % FALSE!!! what about control message with code + message
-    type :: text | binary | close | ping | pong | fragmented
+    frames = [] :: list(#frame{}),
+    payload     :: payload(),
+    type        :: encode_types() | fragmented
   }).
+
+% @type message() = #message{
+%    frames  = list(#frame{}),
+%    payload = payload(),
+%    type    = encode_types() | fragmented
+%  }.
 -type message() :: #message{}.
 
 %%========================================
@@ -57,7 +64,9 @@
 %   <dd>To encode data as binary messages</dd>
 %
 %   <dt>`close'</dt>
-%   <dd>To encode data as close messages</dd>
+%   <dd>To encode data as close messages. When including a payload for this type of messages it
+%   has to be a tuple with an integer if the first position (closing status) and a string on the
+%   second (reason)</dd>
 %
 %   <dt>`ping'</dt>
 %   <dd>To encode data as ping messages</dd>
@@ -74,7 +83,7 @@
 %
 % If no type (see {@link encode_types()}) is given the error `missing_datatypes' is returned.
 -spec encode(
-  Data    :: string() | binary(),
+  Data    :: payload(),
   Options :: [encode_types() | encode_options()]
   ) ->
   [binary()] |
@@ -421,9 +430,7 @@ build_message(Message, Frames) ->
 -spec build_payload_from_frames(
   Type :: close | binary | text,
   Frames :: list(#frame{})
-  ) ->
-    {pos_integer(), list()} |
-    list().
+  ) -> payload().
 build_payload_from_frames(close, [Frame]) ->
   case Frame#frame.payload of
     <<>> -> {undefined, undefined};
