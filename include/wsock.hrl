@@ -29,9 +29,3 @@
     next_piece :: atom(),
     next_piece_size :: integer()
   }).
-
--record(message, {
-    frames = [] :: list(#frame{}),
-    payload :: string() | binary(), % FALSE!!! what about control message with code + message
-    type :: text | binary | close | ping | pong | fragmented
-  }).

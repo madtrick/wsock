@@ -16,6 +16,7 @@
   * [Sending data](#sending_server)
   * [Receiving data](#receiving_server)
   * [Control messages](#server_control_messages)
+* [Documentation](#documentation)
 * [Tests](#tests)
 * [Contributing](#contributing)
 * [Author](#author)
@@ -190,6 +191,19 @@ Once the connection has been stablished you can send data through it:
   ```erlang
   ListOfMessages = wsock_message:encode({StatusCode, Payload}, [close])
   ListOfMessages = wsock_message:encode([]], [close]) % If no payload
+  ```
+  
+## Documentation <a name="documentation"></a>
+Documentation for the modules can be generated. Run:
+
+  ```shell
+  rake doc
+  ```
+  
+or, in case you don't have rake installed:
+
+  ```shell
+  rebar doc
   ```
 
 ## Tests <a name="tests"></a>
