@@ -72,6 +72,7 @@
 %
 % One of the `text', `binary', `close', `ping' or `pong' options is required.
 %
+% If no type (see {@link encode_types()}) is given the error `missing_datatypes' is returned.
 -spec encode(
   Data    :: string() | binary(),
   Options :: [encode_types() | encode_options()]
