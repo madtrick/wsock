@@ -29,3 +29,17 @@
     next_piece :: atom(),
     next_piece_size :: integer()
   }).
+
+-type decode_options() :: masked.
+-type encode_options() :: mask.
+-type encode_types()   :: text | binary | close | ping | pong.
+-type frame_type()     :: encode_types() | continuation.
+-type payload()        :: string() | binary() | {pos_integer(), string()}.
+
+-record(message, {
+    frames = [] :: list(#frame{}),
+    payload     :: payload(),
+    type        :: encode_types() | fragmented
+  }).
+
+-type message() :: #message{}.

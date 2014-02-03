@@ -1,5 +1,8 @@
 #Change Log
 
+### 1.1.4
+* Move back to the header file (wsock.hrl) the definition of the #message{} record. Otherwise the record was not exported outside of the ```wsock_message``` module.
+
 ### 1.1.3
 * Fix versio number in app.src file
 
