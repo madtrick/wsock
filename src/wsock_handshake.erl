@@ -35,7 +35,7 @@ handle_open(Message) ->
       {error, ?INVALID_CLIENT_OPEN}
   end.
 
--spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> {ok, ?INVALID_SERVER_RESPONSE} | {ok, #handshake{}}.
+-spec handle_response(Response::#http_message{}, Handshake::#handshake{}) -> {ok, #handshake{}} | {error, ?INVALID_SERVER_RESPONSE}.
 handle_response(Response, Handshake) ->
   case validate_handshake_response(Response, Handshake) of
     true ->
