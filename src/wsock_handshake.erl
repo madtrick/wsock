@@ -17,7 +17,7 @@
 -module(wsock_handshake).
 -include("wsock.hrl").
 
--export([open/3, handle_response/2]).
+-export([open/3, open/4, handle_response/2]).
 -export([handle_open/1, response/1]).
 
 -define(VERSION, 13).
@@ -82,6 +82,25 @@ open(Resource, Host, Port) ->
   Message = wsock_http:build(request, RequestLine, Headers),
   {ok, #handshake{ version = ?VERSION, type = open, message = Message}}.
 
+
+-spec open(Resource ::string(), Host ::string(), Port::integer(), Cookie::string()) -> {ok, #handshake{}}.
+open(Resource, Host, Port, Cookie) when is_integer(Port) ->
+  RequestLine = [
+    {method, "GET"},
+    {version, "1.1"},
+    {resource, Resource}
+  ],
+
+  Headers =[ 
+    {"Host", lists:flatten([Host, ":", integer_to_list(Port)])},
+    {"Upgrade", "websocket"},
+    {"Connection", "upgrade"},
+    {"Sec-Websocket-Key", wsock_key:generate()},
+    {"Sec-Websocket-Version", integer_to_list(?VERSION)},
+    {"Cookie", Cookie}
+  ],
+  Message = wsock_http:build(request, RequestLine, Headers),
+  {ok, #handshake{ version = ?VERSION, type = open, message = Message}}.  
 
 %=======================
 % INTERNAL FUNCTIONS
