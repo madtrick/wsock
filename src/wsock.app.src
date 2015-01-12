@@ -7,6 +7,5 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { wsock_app, []}},
   {env, []}
  ]}.
