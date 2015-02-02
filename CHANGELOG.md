@@ -1,5 +1,11 @@
 #Change Log
 
+### 1.1.6
+* Remove mod tuple from app.src file. That crashed releases as it referenced a module that does not exist.
+
+### 1.1.5
+* Fix wsock_handshake:handle_response/2 spec
+
 ### 1.1.4
 * Move back to the header file (wsock.hrl) the definition of the #message{} record. Otherwise the record was not exported outside of the ```wsock_message``` module.
 
