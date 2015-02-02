@@ -1,5 +1,8 @@
 #Change Log
 
+### 1.1.7
+* Remove the `data` folder. Move its contents to the root of the source path
+
 ### 1.1.6
 * Remove mod tuple from app.src file. That crashed releases as it referenced a module that does not exist.
 
