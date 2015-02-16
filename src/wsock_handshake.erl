@@ -56,7 +56,7 @@ response(ClientWebsocketKey) ->
     headers = [
       {"upgrade", "Websocket"},
       {"connection", "Upgrade"},
-      {"sec-websocket-accept", base64:encode_to_string(crypto:sha(<<BinaryKey/binary, ?GUID>>)) }
+      {"sec-websocket-accept", base64:encode_to_string(crypto:hash(sha, <<BinaryKey/binary, ?GUID>>)) }
     ],
     type = response
   },
@@ -160,7 +160,7 @@ validate_connection_header(Response) ->
 validate_sec_websocket_accept_header(Response, Handshake) ->
   ClientKey         = wsock_http:get_header_value("sec-websocket-key", Handshake#handshake.message),
   BinaryClientKey   = list_to_binary(ClientKey),
-  ExpectedHashedKey = base64:encode_to_string(crypto:sha(<<BinaryClientKey/binary, ?GUID>>)),
+  ExpectedHashedKey = base64:encode_to_string(crypto:hash(sha, <<BinaryClientKey/binary, ?GUID>>)),
   HashedKey         = wsock_http:get_header_value("sec-websocket-accept", Response),
 
   ExpectedHashedKey == HashedKey.
