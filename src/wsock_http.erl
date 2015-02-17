@@ -22,7 +22,7 @@
 
 -define(CTRL, "\r\n").
 
--spec decode(Data::binary(), Type::request | response) -> {ok,#http_message{}} | {error, malformed_request}.
+-spec decode(Data::binary(), Type::request | response) -> {ok,#http_message{}} | {error, malformed_request} | fragmented_http_message.
 decode(Data, Type) ->
   case process_startline(Data, Type) of
     fragmented ->
@@ -120,7 +120,7 @@ decode_http_message(Type, Chunk, Data) ->
   case erlang:decode_packet(Type, Data, []) of
     {more, _} ->
       fragmented;
-    {error, _} -> 
+    {error, _} ->
       {error, invalid_http_message};
     {ok, {http_error, _}} ->
       {error, invalid_http_message};
