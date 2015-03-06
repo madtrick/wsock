@@ -27,7 +27,7 @@
 %%========================================
 %% Types
 %%========================================
--type message_type()   :: begin_message | continue_message.
+-type message_type()   :: begin_message | continue_message | continue.
 
 % @type decode_options() = masked.
 % @type encode_options() = mask.
@@ -356,6 +356,8 @@ process_frame(control_fragment, _ ,_, _) ->
 process_frame(open_close, _, Frame, Message) ->
   frame_to_complete_message(Frame, Message);
 process_frame(open_continue, _, Frame, Message) ->
+  frame_for_fragmented_message(Frame, Message);
+process_frame(continue, begin_message, Frame, Message) ->
   frame_for_fragmented_message(Frame, Message);
 process_frame(continue, continue_message, Frame, Message) ->
   frame_for_fragmented_message(Frame, Message);
